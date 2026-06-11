@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Tracker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Header (always visible once logged in) -->
+  <div class="header">
+    <div class="brand">
+      <div class="brand-icon">💼</div>
+      Job Tracker
+    </div>
+    <div id="user-row" class="user-row hidden">
+      <span id="user-name" class="user-name"></span>
+      <button id="logout-btn" class="btn-logout">Logout</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ── Login view ── -->
+    <div id="login-view">
+      <p class="login-title">Sign in to continue</p>
+      <p class="login-sub">Your credentials are stored securely in your browser.</p>
+
+      <form id="login-form">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="you@example.com" required autocomplete="email" />
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="••••••••" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn btn-primary" id="login-btn">Sign in</button>
+      </form>
+      <div id="login-error" class="error-msg hidden"></div>
+    </div>
+
+    <!-- ── Authenticated views ── -->
+    <div id="auth-view" class="hidden">
+
+      <!-- Loading -->
+      <div id="view-loading" class="hidden">
+        <div class="loading-box">
+          <div class="spinner"></div>
+          Fetching job data…
+        </div>
+      </div>
+
+      <!-- Not on a supported job page -->
+      <div id="view-unsupported" class="hidden">
+        <div class="info-box">
+          <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#475569" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/>
+          </svg>
+          Navigate to a job posting on<br />
+          <strong style="color:#94a3b8">LinkedIn, Indeed, or Glassdoor</strong><br />
+          to log an application.
+        </div>
+      </div>
+
+      <!-- No data scraped -->
+      <div id="view-nodata" class="hidden">
+        <div class="info-box">
+          <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#475569" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z"/>
+          </svg>
+          Couldn't read job data on this page.<br />
+          Try refreshing the page and reopening the extension.
+        </div>
+      </div>
+
+      <!-- Job card -->
+      <div id="view-job" class="hidden">
+        <div class="job-card">
+          <div id="job-title" class="job-title"></div>
+          <div class="job-meta">
+            <span id="job-company"></span>
+            <span id="job-location"></span>
+          </div>
+        </div>
+        <button id="log-btn" class="btn btn-success">Log Application</button>
+        <div id="log-error" class="error-msg hidden"></div>
+      </div>
+
+      <!-- Success -->
+      <div id="view-success" class="hidden">
+        <div class="success-box">
+          <div class="success-icon">✅</div>
+          <div class="success-title">Application logged!</div>
+          <div class="success-sub" id="success-detail"></div>
+        </div>
+        <button id="log-another-btn" class="btn btn-primary" style="margin-top:12px">Log another</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
