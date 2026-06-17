@@ -21,7 +21,7 @@
     {
       "matches": [
         "https://www.linkedin.com/jobs/*",
-        "https://*.indeed.com/viewjob*",
+        "https://*.indeed.com/*",
         "https://www.glassdoor.com/job-listing/*"
       ],
       "js": ["content.js"],

@@ -11,6 +11,9 @@ public class Application
     public string? JobDescription { get; set; }
     public string Status { get; set; } = "Applied";
     public string? Notes { get; set; }
+    public string? CoverLetter { get; set; }
+    public string? TailoredResume { get; set; }
+    public string? InterviewPrep { get; set; }
     public DateTime AppliedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public bool IsAutoGhosted { get; set; } = false;

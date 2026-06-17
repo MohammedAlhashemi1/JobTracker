@@ -3,8 +3,18 @@ const API = 'http://localhost:5220/api';
 const SUPPORTED = [
   'linkedin.com/jobs/',
   'indeed.com/viewjob',
+  'indeed.com/cmp/',
   'glassdoor.com/job-listing/',
 ];
+
+function isSupported(url) {
+  if (SUPPORTED.some((s) => url.includes(s))) return true;
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes('indeed.com') && u.searchParams.has('vjk')) return true;
+  } catch {}
+  return false;
+}
 
 // ── DOM refs ──────────────────────────────────────────────────────────────
 
@@ -102,7 +112,7 @@ async function enterAuthView(token, fullName) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const url = tab?.url || '';
 
-  if (!SUPPORTED.some((s) => url.includes(s))) {
+  if (!isSupported(url)) {
     showOnly(views.auth, views.unsupported);
     return;
   }

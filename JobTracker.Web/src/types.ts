@@ -25,6 +25,9 @@ export interface Application {
   jobDescription?: string;
   status: string;
   notes?: string;
+  coverLetter?: string;
+  tailoredResume?: string;
+  interviewPrep?: string;
   appliedAt: string;
   updatedAt: string;
   isAutoGhosted: boolean;
@@ -64,4 +67,37 @@ export interface ScrapeResponse {
   location?: string;
   jobDescription?: string;
   url: string;
+}
+
+export interface JobMatchResult {
+  score: number;
+  matchingSkills: string[];
+  missingSkills: string[];
+  emphasis: string;
+}
+
+export interface ResumeTailorResult {
+  tailoredBullets: string;
+}
+
+export interface CoverLetterResult {
+  coverLetter: string;
+}
+
+export interface StrategyResult {
+  report: string;
+}
+
+export interface EmailInterpretResult {
+  suggestedStatus: string;
+  explanation: string;
+  summary: string;
+}
+
+export interface InterviewPrepResult {
+  prep: string;
+}
+
+export interface FollowUpResult {
+  email: string;
 }

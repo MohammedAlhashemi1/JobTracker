@@ -100,6 +100,9 @@ public class ApplicationService
         JobDescription = a.JobDescription,
         Status = a.Status,
         Notes = a.Notes,
+        CoverLetter = a.CoverLetter,
+        TailoredResume = a.TailoredResume,
+        InterviewPrep = a.InterviewPrep,
         AppliedAt = a.AppliedAt,
         UpdatedAt = a.UpdatedAt,
         IsAutoGhosted = a.IsAutoGhosted

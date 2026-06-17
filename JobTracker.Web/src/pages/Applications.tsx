@@ -1,8 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
+import AgentResultPanel from '../components/AgentResultPanel';
 import api from '../lib/api';
-import type { Application, CreateApplicationRequest, UpdateApplicationRequest } from '../types';
+import { downloadDocx } from '../lib/downloadDocx';
+import type {
+  Application,
+  CreateApplicationRequest,
+  UpdateApplicationRequest,
+  JobMatchResult,
+  ResumeTailorResult,
+  CoverLetterResult,
+  EmailInterpretResult,
+  InterviewPrepResult,
+} from '../types';
 
 const STATUSES = ['Applied', 'Responded', 'InterviewScheduled', 'Offer', 'Rejected', 'Ghosted'];
 
@@ -23,6 +34,79 @@ function Drawer({
   const [notesDirty, setNotesDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // agent state
+  type AgentKey = 'match' | 'resume-tailor' | 'cover-letter' | 'email-interpret';
+  type AgentResult =
+    | { type: 'match'; data: JobMatchResult }
+    | { type: 'text'; label: string; data: string }
+    | { type: 'email'; data: EmailInterpretResult };
+
+  const [pendingAgent, setPendingAgent] = useState<AgentKey | null>(null);
+  const [agentLoading, setAgentLoading] = useState(false);
+  const [agentResult, setAgentResult] = useState<AgentResult | null>(null);
+  const [agentError, setAgentError] = useState('');
+  const [emailText, setEmailText] = useState('');
+  const [showEmailInput, setShowEmailInput] = useState(false);
+
+  // saved doc state — initialised from DB, updated after agent runs
+  const [savedCoverLetter, setSavedCoverLetter] = useState<string | null>(app.coverLetter ?? null);
+  const [savedTailoredResume, setSavedTailoredResume] = useState<string | null>(app.tailoredResume ?? null);
+
+  // interview prep state
+  const [savedInterviewPrep, setSavedInterviewPrep] = useState<string | null>(app.interviewPrep ?? null);
+  const [interviewPrepLoading, setInterviewPrepLoading] = useState(false);
+  const [interviewPrepError, setInterviewPrepError] = useState('');
+  const [interviewPrepPending, setInterviewPrepPending] = useState(false);
+  const [interviewPrepExpanded, setInterviewPrepExpanded] = useState(false);
+
+  const runAgent = async (key: AgentKey) => {
+    setPendingAgent(null);
+    setAgentLoading(true);
+    setAgentResult(null);
+    setAgentError('');
+    try {
+      if (key === 'match') {
+        const { data } = await api.post<JobMatchResult>(`/agents/match/${app.id}`);
+        setAgentResult({ type: 'match', data });
+      } else if (key === 'resume-tailor') {
+        const { data } = await api.post<ResumeTailorResult>(`/agents/resume-tailor/${app.id}`);
+        setSavedTailoredResume(data.tailoredBullets);
+        onUpdated({ ...app, tailoredResume: data.tailoredBullets });
+        setAgentResult(null);
+      } else if (key === 'cover-letter') {
+        const { data } = await api.post<CoverLetterResult>(`/agents/cover-letter/${app.id}`);
+        setSavedCoverLetter(data.coverLetter);
+        onUpdated({ ...app, coverLetter: data.coverLetter });
+        setAgentResult(null);
+      } else if (key === 'email-interpret') {
+        const { data } = await api.post<EmailInterpretResult>(`/agents/email-interpret/${app.id}`, { emailText });
+        setAgentResult({ type: 'email', data });
+      }
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setAgentError(msg || 'Agent failed. Please try again.');
+    } finally {
+      setAgentLoading(false);
+    }
+  };
+
+  const runInterviewPrep = async () => {
+    setInterviewPrepPending(false);
+    setInterviewPrepLoading(true);
+    setInterviewPrepError('');
+    try {
+      const { data } = await api.post<InterviewPrepResult>(`/agents/interview-prep/${app.id}`);
+      setSavedInterviewPrep(data.prep);
+      onUpdated({ ...app, interviewPrep: data.prep });
+      setInterviewPrepExpanded(true);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setInterviewPrepError(msg || 'Interview prep failed. Please try again.');
+    } finally {
+      setInterviewPrepLoading(false);
+    }
+  };
 
   const patch = async (payload: UpdateApplicationRequest) => {
     const { data } = await api.put<Application>(`/applications/${app.id}`, payload);
@@ -148,6 +232,298 @@ function Drawer({
               </button>
             )}
           </div>
+
+          {/* Interview Prep — shown only when status is InterviewScheduled */}
+          {app.status === 'InterviewScheduled' && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <p className="text-slate-500 text-xs uppercase tracking-wider">Interview Prep</p>
+                <span className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">
+                  uses more credits
+                </span>
+              </div>
+
+              {savedInterviewPrep && !interviewPrepExpanded && (
+                <div className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-emerald-400">✓</span>
+                    <span className="text-xs text-slate-300 font-medium">Interview prep ready</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setInterviewPrepExpanded(true)}
+                      className="text-xs text-indigo-400 hover:text-indigo-300 transition"
+                    >
+                      View
+                    </button>
+                    <span className="text-slate-700">·</span>
+                    <button
+                      onClick={() => { setSavedInterviewPrep(null); setInterviewPrepPending(true); }}
+                      className="text-xs text-slate-500 hover:text-slate-300 transition"
+                    >
+                      Regenerate
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {savedInterviewPrep && interviewPrepExpanded && (
+                <div className="mb-3">
+                  <div className="max-h-96 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg p-4 mb-2">
+                    <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{savedInterviewPrep}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setInterviewPrepExpanded(false)}
+                      className="flex-1 text-xs border border-slate-600 text-slate-400 hover:text-white rounded-lg py-1.5 transition"
+                    >
+                      Collapse
+                    </button>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(savedInterviewPrep); }}
+                      className="flex-1 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg py-1.5 transition"
+                    >
+                      Copy
+                    </button>
+                    <button
+                      onClick={() => { setSavedInterviewPrep(null); setInterviewPrepExpanded(false); setInterviewPrepPending(true); }}
+                      className="text-xs border border-slate-700 text-slate-400 hover:text-white rounded-lg px-3 py-1.5 transition"
+                    >
+                      Regenerate
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {interviewPrepPending && !interviewPrepLoading && (
+                <div className="mb-3 bg-amber-900/20 border border-amber-700/40 rounded-lg p-3">
+                  <p className="text-xs text-amber-300 mb-3">
+                    This agent call uses more API credits than a regular chat message.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setInterviewPrepPending(false)}
+                      className="flex-1 text-xs border border-slate-600 text-slate-400 hover:text-white rounded-lg py-1.5 transition"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={runInterviewPrep}
+                      className="flex-1 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg py-1.5 transition"
+                    >
+                      Run agent
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {interviewPrepLoading && (
+                <div className="flex items-center gap-2 text-slate-400 text-xs py-3">
+                  <div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                  Generating interview prep…
+                </div>
+              )}
+
+              {interviewPrepError && (
+                <div className="mb-3 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2.5 text-xs text-red-400">
+                  {interviewPrepError}
+                </div>
+              )}
+
+              {!savedInterviewPrep && !interviewPrepPending && !interviewPrepLoading && (
+                <button
+                  onClick={() => setInterviewPrepPending(true)}
+                  className="text-xs border border-slate-700 bg-slate-800 text-slate-300 hover:border-indigo-500 hover:text-indigo-300 px-3 py-1.5 rounded-lg transition"
+                >
+                  Prepare for Interview
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* AI Agents */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-slate-500 text-xs uppercase tracking-wider">AI Agents</p>
+              <span className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">
+                uses more credits
+              </span>
+            </div>
+
+            {/* Saved documents */}
+            {(savedCoverLetter || savedTailoredResume) && (
+              <div className="mb-4 space-y-2">
+                {savedCoverLetter && (
+                  <div className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-emerald-400">✓</span>
+                      <span className="text-xs text-slate-300 font-medium">Cover Letter saved</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => downloadDocx(`cover-letter-${app.company.replace(/\s+/g, '-')}`, savedCoverLetter)}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 transition"
+                      >
+                        Download .docx
+                      </button>
+                      <span className="text-slate-700">·</span>
+                      <button
+                        onClick={() => { setSavedCoverLetter(null); setPendingAgent('cover-letter'); }}
+                        className="text-xs text-slate-500 hover:text-slate-300 transition"
+                      >
+                        Regenerate
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {savedTailoredResume && (
+                  <div className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-emerald-400">✓</span>
+                      <span className="text-xs text-slate-300 font-medium">Tailored Resume saved</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => downloadDocx(`tailored-resume-${app.company.replace(/\s+/g, '-')}`, savedTailoredResume)}
+                        className="text-xs text-indigo-400 hover:text-indigo-300 transition"
+                      >
+                        Download .docx
+                      </button>
+                      <span className="text-slate-700">·</span>
+                      <button
+                        onClick={() => { setSavedTailoredResume(null); setPendingAgent('resume-tailor'); }}
+                        className="text-xs text-slate-500 hover:text-slate-300 transition"
+                      >
+                        Regenerate
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Credit warning confirmation */}
+            {pendingAgent && !agentLoading && (
+              <div className="mb-3 bg-amber-900/20 border border-amber-700/40 rounded-lg p-3">
+                <p className="text-xs text-amber-300 mb-3">
+                  This agent call uses more API credits than a regular chat message.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPendingAgent(null)}
+                    className="flex-1 text-xs border border-slate-600 text-slate-400 hover:text-white rounded-lg py-1.5 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => runAgent(pendingAgent)}
+                    className="flex-1 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg py-1.5 transition"
+                  >
+                    Run agent
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Loading */}
+            {agentLoading && (
+              <div className="flex items-center gap-2 text-slate-400 text-xs py-3">
+                <div className="w-3.5 h-3.5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                Running agent…
+              </div>
+            )}
+
+            {/* Error */}
+            {agentError && (
+              <div className="mb-3 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2.5 text-xs text-red-400">
+                {agentError}
+              </div>
+            )}
+
+            {/* Agent buttons */}
+            {!pendingAgent && !agentLoading && (
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'match' as AgentKey, label: 'Analyze Match' },
+                  { key: 'resume-tailor' as AgentKey, label: 'Tailor Resume' },
+                  { key: 'cover-letter' as AgentKey, label: 'Cover Letter' },
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => { setAgentResult(null); setAgentError(''); setPendingAgent(key); }}
+                    className="text-xs border border-slate-700 bg-slate-800 text-slate-300 hover:border-indigo-500 hover:text-indigo-300 px-3 py-1.5 rounded-lg transition"
+                  >
+                    {label}
+                  </button>
+                ))}
+
+                {!showEmailInput && (
+                  <button
+                    onClick={() => { setShowEmailInput(true); setAgentResult(null); setAgentError(''); }}
+                    className="text-xs border border-slate-700 bg-slate-800 text-slate-300 hover:border-indigo-500 hover:text-indigo-300 px-3 py-1.5 rounded-lg transition"
+                  >
+                    Interpret Email
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Email input */}
+            {showEmailInput && !agentLoading && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-slate-500">Paste the recruiter email below:</p>
+                <textarea
+                  rows={5}
+                  value={emailText}
+                  onChange={(e) => setEmailText(e.target.value)}
+                  placeholder="Paste recruiter email here…"
+                  className="w-full bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-500 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none transition"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setShowEmailInput(false); setEmailText(''); setPendingAgent(null); }}
+                    className="flex-1 text-xs border border-slate-600 text-slate-400 hover:text-white rounded-lg py-1.5 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => { if (emailText.trim()) setPendingAgent('email-interpret'); }}
+                    disabled={!emailText.trim()}
+                    className="flex-1 text-xs bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white font-semibold rounded-lg py-1.5 transition"
+                  >
+                    Analyze email
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Result */}
+            {agentResult && (
+              agentResult.type === 'match' ? (
+                <AgentResultPanel
+                  type="match"
+                  title="Job Match Analysis"
+                  result={agentResult.data}
+                  onClose={() => setAgentResult(null)}
+                />
+              ) : agentResult.type === 'text' ? (
+                <AgentResultPanel
+                  type="text"
+                  title={agentResult.label}
+                  content={agentResult.data}
+                  onClose={() => setAgentResult(null)}
+                />
+              ) : (
+                <AgentResultPanel
+                  type="email"
+                  title="Email Interpretation"
+                  result={agentResult.data}
+                  onClose={() => { setAgentResult(null); setShowEmailInput(false); setEmailText(''); }}
+                  onApplyStatus={(status) => { patch({ status }); setAgentResult(null); setShowEmailInput(false); setEmailText(''); }}
+                />
+              )
+            )}
+          </div>
         </div>
 
         {/* footer */}
@@ -263,6 +639,17 @@ function AddModal({
               value={form.appliedAt ?? today}
               onChange={set('appliedAt')}
               className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-400 mb-1.5">Job Description</label>
+            <textarea
+              rows={4}
+              value={form.jobDescription ?? ''}
+              onChange={set('jobDescription')}
+              placeholder="Paste the job description here so AI agents can analyze it…"
+              className="w-full bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none transition"
             />
           </div>
 

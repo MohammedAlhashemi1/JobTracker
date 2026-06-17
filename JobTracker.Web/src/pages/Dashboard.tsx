@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import Layout from '../components/Layout';
 import api from '../lib/api';
-import type { Application } from '../types';
+import type { Application, StrategyResult, FollowUpResult } from '../types';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -132,6 +132,220 @@ function InsightsCard() {
   );
 }
 
+function StrategistCard() {
+  const [state, setState] = useState<'idle' | 'confirming' | 'loading' | 'done'>('idle');
+  const [report, setReport] = useState('');
+  const [error, setError] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const run = async () => {
+    setState('loading');
+    setError('');
+    try {
+      const { data } = await api.post<StrategyResult>('/agents/strategy');
+      setReport(data.report);
+      setState('done');
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setError(msg || 'Strategy analysis failed. Please try again.');
+      setState('idle');
+    }
+  };
+
+  const copy = () => {
+    navigator.clipboard.writeText(report);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 mt-4">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-6 h-6 rounded-md bg-violet-600/30 flex items-center justify-center">
+          <svg className="w-3.5 h-3.5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-white">Strategy Analysis</h3>
+          <span className="text-xs text-amber-400/80">uses more credits</span>
+        </div>
+      </div>
+
+      {state === 'idle' && (
+        <button
+          onClick={() => setState('confirming')}
+          className="w-full text-sm border border-violet-700/60 bg-violet-900/20 text-violet-300 hover:bg-violet-900/40 font-medium rounded-lg py-2.5 transition"
+        >
+          Run Strategy Analysis
+        </button>
+      )}
+
+      {state === 'confirming' && (
+        <div className="bg-amber-900/20 border border-amber-700/40 rounded-lg p-3 space-y-3">
+          <p className="text-xs text-amber-300">
+            This runs a deep analysis of your full application history and uses more API credits than a chat message.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setState('idle')}
+              className="flex-1 text-xs border border-slate-600 text-slate-400 hover:text-white rounded-lg py-1.5 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={run}
+              className="flex-1 text-xs bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-lg py-1.5 transition"
+            >
+              Run analysis
+            </button>
+          </div>
+        </div>
+      )}
+
+      {state === 'loading' && (
+        <div className="flex items-center gap-2 text-slate-400 text-sm py-2">
+          <div className="w-4 h-4 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
+          Analysing your job search…
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2.5 text-xs text-red-400">
+          {error}
+        </div>
+      )}
+
+      {state === 'done' && report && (
+        <div>
+          <div className="max-h-96 overflow-y-auto bg-slate-800 rounded-lg p-4 mb-3">
+            <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{report}</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={copy}
+              className="flex-1 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg py-2 transition"
+            >
+              {copied ? '✓ Copied!' : 'Copy report'}
+            </button>
+            <button
+              onClick={() => { setState('idle'); setReport(''); }}
+              className="text-xs border border-slate-700 text-slate-400 hover:text-white rounded-lg px-3 py-2 transition"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FollowUpCard({ apps }: { apps: Application[] }) {
+  const overdue = apps.filter((a) => a.status === 'Applied' && a.daysSinceApplied > 7);
+
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [loading, setLoading] = useState<Record<number, boolean>>({});
+  const [errors, setErrors] = useState<Record<number, string>>({});
+  const [copied, setCopied] = useState<Record<number, boolean>>({});
+
+  if (overdue.length === 0) return null;
+
+  const draft = async (appId: number) => {
+    setLoading((p) => ({ ...p, [appId]: true }));
+    setErrors((p) => ({ ...p, [appId]: '' }));
+    try {
+      const { data } = await api.post<FollowUpResult>(`/agents/follow-up/${appId}`);
+      setDrafts((p) => ({ ...p, [appId]: data.email }));
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      setErrors((p) => ({ ...p, [appId]: msg || 'Failed to generate email.' }));
+    } finally {
+      setLoading((p) => ({ ...p, [appId]: false }));
+    }
+  };
+
+  const copy = (appId: number, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied((p) => ({ ...p, [appId]: true }));
+    setTimeout(() => setCopied((p) => ({ ...p, [appId]: false })), 2000);
+  };
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-6 h-6 rounded-md bg-amber-600/30 flex items-center justify-center">
+          <svg className="w-3.5 h-3.5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <div>
+          <h3 className="text-sm font-semibold text-white">Follow-up Reminders</h3>
+          <p className="text-xs text-slate-500">{overdue.length} application{overdue.length !== 1 ? 's' : ''} with no response after 7+ days</p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {overdue.map((a) => (
+          <div key={a.id} className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-white truncate">{a.company}</p>
+                <p className="text-xs text-slate-400 truncate">{a.jobTitle}</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-amber-400 bg-amber-900/30 border border-amber-800/40 px-2 py-0.5 rounded-full whitespace-nowrap">
+                  {a.daysSinceApplied}d ago
+                </span>
+                {!drafts[a.id] && (
+                  <button
+                    onClick={() => draft(a.id)}
+                    disabled={loading[a.id]}
+                    className="text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-300 px-2.5 py-1 rounded-lg transition whitespace-nowrap"
+                  >
+                    {loading[a.id] ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 border border-slate-400 border-t-transparent rounded-full animate-spin inline-block" />
+                        Drafting…
+                      </span>
+                    ) : 'Draft Follow-up'}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {errors[a.id] && (
+              <p className="text-xs text-red-400 mt-1">{errors[a.id]}</p>
+            )}
+
+            {drafts[a.id] && (
+              <div className="mt-2">
+                <div className="bg-slate-900 rounded-lg p-3 mb-2 max-h-48 overflow-y-auto">
+                  <p className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed">{drafts[a.id]}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => copy(a.id, drafts[a.id])}
+                    className="flex-1 text-xs bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg py-1.5 transition"
+                  >
+                    {copied[a.id] ? '✓ Copied!' : 'Copy email'}
+                  </button>
+                  <button
+                    onClick={() => setDrafts((p) => { const n = { ...p }; delete n[a.id]; return n; })}
+                    className="text-xs border border-slate-700 text-slate-400 hover:text-white rounded-lg px-3 py-1.5 transition"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── page ───────────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -195,8 +409,12 @@ export default function Dashboard() {
           <div>
             <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Insights</h2>
             <InsightsCard />
+            <StrategistCard />
           </div>
         </div>
+
+        {/* Follow-up Reminders */}
+        {!loading && <FollowUpCard apps={apps} />}
 
         {/* Line chart */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">

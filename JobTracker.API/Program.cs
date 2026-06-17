@@ -17,6 +17,7 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<ApplicationService>();
 builder.Services.AddHttpClient<ScraperService>();
 builder.Services.AddScoped<AiService>();
+builder.Services.AddScoped<AgentService>();
 builder.Services.AddHostedService<GhostDetectionService>();
 
 var jwtSecret = builder.Configuration["Jwt:Secret"]!;
@@ -39,11 +40,18 @@ builder.Services.AddCors(options =>
         policy.WithOrigins("http://localhost:5173")
               .AllowAnyHeader()
               .AllowAnyMethod());
+
+    options.AddPolicy("AllowExtension", policy =>
+        policy.SetIsOriginAllowed(origin =>
+            origin.StartsWith("chrome-extension://") ||
+            origin == "http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod());
 });
 
 var app = builder.Build();
 
-app.UseCors("AllowFrontend");
+app.UseCors("AllowExtension");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();

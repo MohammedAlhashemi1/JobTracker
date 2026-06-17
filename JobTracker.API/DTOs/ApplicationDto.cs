@@ -39,6 +39,9 @@ public class ApplicationResponseDto
     public string? JobDescription { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? Notes { get; set; }
+    public string? CoverLetter { get; set; }
+    public string? TailoredResume { get; set; }
+    public string? InterviewPrep { get; set; }
     public DateTime AppliedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public bool IsAutoGhosted { get; set; }
