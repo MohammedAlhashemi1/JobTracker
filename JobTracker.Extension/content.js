@@ -1,13 +1,14 @@
+// Keep the message channel open for async response by returning true.
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'GET_JOB_DATA') {
-    sendResponse({ jobData: scrapeJobData() });
+    scrapeJobData().then(jobData => sendResponse({ jobData }));
   }
   return true;
 });
 
-function scrapeJobData() {
+async function scrapeJobData() {
   const url = window.location.href;
-  if (url.includes('linkedin.com'))    return scrapeLinkedIn();
+  if (url.includes('linkedin.com'))    return await scrapeLinkedIn();
   if (url.includes('indeed.com/cmp/')) return scrapeIndeedCmp();
   if (indeedVjk(url))                  return scrapeIndeedVjk();
   if (url.includes('indeed.com'))      return scrapeIndeed();
@@ -19,17 +20,40 @@ function indeedVjk(url) {
   try { return new URL(url).searchParams.has('vjk'); } catch { return false; }
 }
 
-function scrapeLinkedIn() {
-  // Title — h1 inside the container is more precise than the container itself
+// ── LinkedIn ────────────────────────────────────────────────────────────────
+
+async function scrapeLinkedIn() {
+  // Only proceed when a specific job is selected.
+  // On the search results page this means currentJobId is present in the URL.
+  try {
+    const params = new URL(window.location.href).searchParams;
+    const isView = window.location.pathname.includes('/jobs/view/');
+    if (!params.has('currentJobId') && !isView) return null;
+  } catch { return null; }
+
+  // LinkedIn renders the right panel after the URL updates.
+  // Poll until a title element appears (up to 6 seconds, every 300 ms).
+  const TITLE_SELECTORS = [
+    '.job-details-jobs-unified-top-card__job-title h1',
+    '.jobs-unified-top-card__job-title h1',
+    'h1.t-24.t-bold.inline',
+    '.job-details-jobs-unified-top-card__job-title',
+    '.jobs-unified-top-card__job-title',
+    'h1.t-24',
+  ];
+  await waitForAny(TITLE_SELECTORS, 6000);
+
+  // Title — try the h1 inside the container first; it avoids picking up
+  // stale text from adjacent elements.
   const title =
     text('.job-details-jobs-unified-top-card__job-title h1')          ||
-    text('.job-details-jobs-unified-top-card__job-title')             ||
     text('.jobs-unified-top-card__job-title h1')                      ||
-    text('.jobs-unified-top-card__job-title')                         ||
     text('h1.t-24.t-bold.inline')                                     ||
-    text('h1.t-24');
+    text('h1.t-24')                                                   ||
+    text('.job-details-jobs-unified-top-card__job-title')             ||
+    text('.jobs-unified-top-card__job-title');
 
-  // Company — prefer the anchor text inside the element
+  // Company — anchor inside the element gives the cleanest text.
   const company =
     text('.job-details-jobs-unified-top-card__company-name a')        ||
     text('.job-details-jobs-unified-top-card__company-name')          ||
@@ -37,15 +61,15 @@ function scrapeLinkedIn() {
     text('.jobs-unified-top-card__company-name')                      ||
     text('.topcard__org-name');
 
-  // Location — first bullet span; LinkedIn orders it: location · type · posted
+  // Location — LinkedIn orders bullets: location · work-type · posted date.
+  // The first matching element is the location.
   const location =
     text('.job-details-jobs-unified-top-card__bullet')                ||
     text('.jobs-unified-top-card__bullet')                            ||
     text('.topcard__flavor--bullet')                                  ||
     text('.job-details-jobs-unified-top-card__primary-description-container .tvm__text');
 
-  // Description — #job-details has been the stable container ID since ~2023;
-  // class-based selectors are fallbacks for older page versions
+  // Description — #job-details is the stable container ID since ~2023.
   const description =
     text('#job-details')                                              ||
     text('.jobs-description-content__text--stretch')                 ||
@@ -55,31 +79,44 @@ function scrapeLinkedIn() {
   return { title, company, location, description, url: window.location.href };
 }
 
+// Resolves once any selector in the list has non-empty innerText, or on timeout.
+async function waitForAny(selectors, timeout) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    for (const sel of selectors) {
+      if (document.querySelector(sel)?.innerText?.trim()) return;
+    }
+    await new Promise(r => setTimeout(r, 300));
+  }
+}
+
+// ── Indeed (vjk panel) ──────────────────────────────────────────────────────
+
 function scrapeIndeedVjk() {
-  // ca.indeed.com/?vjk=... — job detail loads in the right panel
-  const panel = document.querySelector('.jobsearch-RightPane')             ||
-                document.querySelector('[data-testid="right-pane"]')       ||
+  const panel = document.querySelector('.jobsearch-RightPane')               ||
+                document.querySelector('[data-testid="right-pane"]')         ||
                 document.querySelector('.jobsearch-ViewJobLayout-jobDisplay') ||
                 document;
 
   const q = (sel) => panel.querySelector(sel)?.innerText?.trim() || '';
 
   return {
-    title:       q('h2.jobTitle')                                          ||
-                 q('[data-testid="jobsearch-JobInfoHeader-title"]')        ||
+    title:       q('h2.jobTitle')                                            ||
+                 q('[data-testid="jobsearch-JobInfoHeader-title"]')          ||
                  q('h1.jobsearch-JobInfoHeader-title'),
-    company:     q('[data-testid="inlineHeader-companyName"]')             ||
+    company:     q('[data-testid="inlineHeader-companyName"]')               ||
                  q('.jobsearch-InlineCompanyRating-companyName'),
-    location:    q('[data-testid="job-location"]')                        ||
+    location:    q('[data-testid="job-location"]')                          ||
                  q('.jobsearch-JobInfoHeader-subtitle'),
-    description: q('#jobDescriptionText')                                  ||
+    description: q('#jobDescriptionText')                                    ||
                  q('.jobsearch-jobDescriptionText'),
     url:         window.location.href,
   };
 }
 
+// ── Indeed (company pages) ──────────────────────────────────────────────────
+
 function scrapeIndeedCmp() {
-  // Job detail side panel on ca.indeed.com/cmp/* company pages
   return {
     title:       text('[data-testid="jobsearch-JobInfoHeader-title"] span')  ||
                  text('[data-testid="jobsearch-JobInfoHeader-title"]')        ||
@@ -98,6 +135,8 @@ function scrapeIndeedCmp() {
   };
 }
 
+// ── Indeed (standard) ───────────────────────────────────────────────────────
+
 function scrapeIndeed() {
   return {
     title:       text('[data-testid="jobsearch-JobInfoHeader-title"]'),
@@ -108,6 +147,8 @@ function scrapeIndeed() {
   };
 }
 
+// ── Glassdoor ───────────────────────────────────────────────────────────────
+
 function scrapeGlassdoor() {
   return {
     title:       text('[data-test="job-title"]'),
@@ -117,6 +158,8 @@ function scrapeGlassdoor() {
     url:         window.location.href,
   };
 }
+
+// ── Utility ─────────────────────────────────────────────────────────────────
 
 function text(selector) {
   return document.querySelector(selector)?.innerText?.trim() || '';
