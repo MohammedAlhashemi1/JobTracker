@@ -29,13 +29,15 @@ public class AgentService
         if (string.IsNullOrWhiteSpace(app.JobDescription))
             throw new InvalidOperationException("This application has no job description to analyze.");
 
+        var resumeNote = HasResume(user) ? "\nThe candidate's full resume is attached as a PDF — use it as the primary source of their skills and experience." : "";
+
         var system = $"""
 You are a career coach analyzing how well a candidate matches a job posting.
 
 Candidate Profile:
 - Name: {user.FullName}
 - Experience Level: {user.ExperienceLevel}
-- Target Roles: {user.TargetRoles}
+- Target Roles: {user.TargetRoles}{resumeNote}
 
 Analyze the match and return ONLY a valid JSON object with exactly these keys:
 - score: integer from 0 to 100
@@ -51,7 +53,7 @@ No extra text, no markdown code blocks. Just the JSON object.
             Model = Model.ClaudeSonnet4_6,
             MaxTokens = 1024,
             System = system,
-            Messages = [new() { Role = "user", Content = $"Job: {app.JobTitle} at {app.Company}\n\n{app.JobDescription}" }]
+            Messages = [new() { Role = "user", Content = BuildUserMessage($"Job: {app.JobTitle} at {app.Company}\n\n{app.JobDescription}", user.ResumeUrl) }]
         });
 
         var raw = ExtractText(response);
@@ -77,13 +79,17 @@ No extra text, no markdown code blocks. Just the JSON object.
         if (string.IsNullOrWhiteSpace(app.JobDescription))
             throw new InvalidOperationException("This application has no job description to tailor against.");
 
+        var resumeNote = HasResume(user)
+            ? "\nThe candidate's full resume is attached as a PDF. Rewrite bullet points based on the actual experience shown in the resume, tailored to the job."
+            : "";
+
         var system = $"""
 You are a professional resume writer specializing in tailoring resumes to specific job postings.
 
 Candidate Profile:
 - Name: {user.FullName}
 - Experience Level: {user.ExperienceLevel}
-- Target Roles: {user.TargetRoles}
+- Target Roles: {user.TargetRoles}{resumeNote}
 
 Rewrite resume bullet points specifically tailored to the job posting. For each bullet:
 - Match keywords from the job description exactly
@@ -99,7 +105,7 @@ Return only the tailored bullet points as formatted text the candidate can copy 
             Model = Model.ClaudeSonnet4_6,
             MaxTokens = 4096,
             System = system,
-            Messages = [new() { Role = "user", Content = $"Tailor my resume for:\n{app.JobTitle} at {app.Company}\n{app.Location}\n\n{app.JobDescription}" }]
+            Messages = [new() { Role = "user", Content = BuildUserMessage($"Tailor my resume for:\n{app.JobTitle} at {app.Company}\n{app.Location}\n\n{app.JobDescription}", user.ResumeUrl) }]
         });
 
         var tailored = ExtractText(response);
@@ -119,13 +125,17 @@ Return only the tailored bullet points as formatted text the candidate can copy 
         if (string.IsNullOrWhiteSpace(app.JobDescription))
             throw new InvalidOperationException("This application has no job description to write a cover letter for.");
 
+        var resumeNote = HasResume(user)
+            ? "\nThe candidate's full resume is attached as a PDF. Draw specific details from their actual experience when writing the letter."
+            : "";
+
         var system = $"""
 You are a professional cover letter writer. Write compelling, specific cover letters that get interviews.
 
 Candidate Profile:
 - Name: {user.FullName}
 - Experience Level: {user.ExperienceLevel}
-- Target Roles: {user.TargetRoles}
+- Target Roles: {user.TargetRoles}{resumeNote}
 
 Write a complete, ready-to-send cover letter that:
 - Opens with a strong hook tied to this specific company and role
@@ -143,7 +153,7 @@ Write it as if you are the candidate. Make it sound human, not AI-generated.
             Model = Model.ClaudeSonnet4_6,
             MaxTokens = 4096,
             System = system,
-            Messages = [new() { Role = "user", Content = $"Write a cover letter for:\n{app.JobTitle} at {app.Company}\n{app.Location}\n\n{app.JobDescription}" }]
+            Messages = [new() { Role = "user", Content = BuildUserMessage($"Write a cover letter for:\n{app.JobTitle} at {app.Company}\n{app.Location}\n\n{app.JobDescription}", user.ResumeUrl) }]
         });
 
         var letter = ExtractText(response);
@@ -220,15 +230,19 @@ Which roles and company types to prioritize and why, based on what's actually ge
 
     public async Task<EmailInterpretResult> InterpretEmailAsync(int applicationId, int userId, string emailText)
     {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId)
+            ?? throw new InvalidOperationException("User not found.");
         var app = await _db.Applications.FirstOrDefaultAsync(a => a.Id == applicationId && a.UserId == userId)
             ?? throw new InvalidOperationException("Application not found.");
+
+        var resumeNote = HasResume(user) ? "\nThe candidate's resume is attached as a PDF for additional context." : "";
 
         var system = $"""
 You are an assistant that interprets recruiter emails for job seekers.
 
 Application context:
 - Role: {app.JobTitle} at {app.Company}
-- Current Status: {app.Status}
+- Current Status: {app.Status}{resumeNote}
 
 Valid statuses: Applied, Responded, InterviewScheduled, Offer, Rejected, Ghosted
 
@@ -245,7 +259,7 @@ No extra text, no markdown code blocks. Just the JSON object.
             Model = Model.ClaudeSonnet4_6,
             MaxTokens = 512,
             System = system,
-            Messages = [new() { Role = "user", Content = $"Email:\n\n{emailText}" }]
+            Messages = [new() { Role = "user", Content = BuildUserMessage($"Email:\n\n{emailText}", user.ResumeUrl) }]
         });
 
         var raw = ExtractText(response);
@@ -271,13 +285,17 @@ No extra text, no markdown code blocks. Just the JSON object.
         if (string.IsNullOrWhiteSpace(app.JobDescription))
             throw new InvalidOperationException("This application has no job description to base interview prep on.");
 
+        var resumeNote = HasResume(user)
+            ? "\nThe candidate's full resume is attached as a PDF. Tailor the technical questions to the specific skills and experience shown in their resume."
+            : "";
+
         var system = $"""
 You are a professional interview coach preparing a candidate for a job interview.
 
 Candidate Profile:
 - Name: {user.FullName}
 - Experience Level: {user.ExperienceLevel}
-- Target Roles: {user.TargetRoles}
+- Target Roles: {user.TargetRoles}{resumeNote}
 
 Generate interview preparation material for the candidate. Structure your response with exactly these three sections using these bold headers:
 
@@ -298,7 +316,7 @@ Make every question specific to this company and role — not generic.
             Model = Model.ClaudeSonnet4_6,
             MaxTokens = 4096,
             System = system,
-            Messages = [new() { Role = "user", Content = $"Prepare me for my interview at {app.Company} for the {app.JobTitle} role.\n\nJob Description:\n{app.JobDescription}" }]
+            Messages = [new() { Role = "user", Content = BuildUserMessage($"Prepare me for my interview at {app.Company} for the {app.JobTitle} role.\n\nJob Description:\n{app.JobDescription}", user.ResumeUrl) }]
         });
 
         var prep = ExtractText(response);
@@ -345,6 +363,25 @@ Return only the subject line and email body. No extra commentary.
         });
 
         return new FollowUpResult { Email = ExtractText(response) };
+    }
+
+    private static bool HasResume(User user) =>
+        !string.IsNullOrWhiteSpace(user.ResumeUrl) &&
+        user.ResumeUrl.StartsWith("data:application/pdf;base64,");
+
+    private static MessageParamContent BuildUserMessage(string text, string? resumeUrl)
+    {
+        if (!string.IsNullOrWhiteSpace(resumeUrl) && resumeUrl.StartsWith("data:application/pdf;base64,"))
+        {
+            var base64 = resumeUrl["data:application/pdf;base64,".Length..];
+            ContentBlockParam docBlock = new DocumentBlockParam
+            {
+                Source = new DocumentBlockParamSource(new Base64PdfSource { Data = base64 })
+            };
+            ContentBlockParam textBlock = new TextBlockParam { Text = text };
+            return new List<ContentBlockParam> { docBlock, textBlock };
+        }
+        return text;
     }
 
     private static string ExtractText(Message response)
