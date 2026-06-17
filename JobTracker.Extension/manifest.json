@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Job Tracker",
-  "version": "1.0",
+  "version": "1.1",
   "description": "Log job applications from LinkedIn, Indeed, and Glassdoor in one click.",
   "permissions": ["activeTab", "storage"],
   "host_permissions": [

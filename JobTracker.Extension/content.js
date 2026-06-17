@@ -20,13 +20,39 @@ function indeedVjk(url) {
 }
 
 function scrapeLinkedIn() {
-  return {
-    title:       text('.job-details-jobs-unified-top-card__job-title'),
-    company:     text('.job-details-jobs-unified-top-card__company-name'),
-    location:    text('.job-details-jobs-unified-top-card__bullet'),
-    description: text('.jobs-description__content'),
-    url:         window.location.href,
-  };
+  // Title — h1 inside the container is more precise than the container itself
+  const title =
+    text('.job-details-jobs-unified-top-card__job-title h1')          ||
+    text('.job-details-jobs-unified-top-card__job-title')             ||
+    text('.jobs-unified-top-card__job-title h1')                      ||
+    text('.jobs-unified-top-card__job-title')                         ||
+    text('h1.t-24.t-bold.inline')                                     ||
+    text('h1.t-24');
+
+  // Company — prefer the anchor text inside the element
+  const company =
+    text('.job-details-jobs-unified-top-card__company-name a')        ||
+    text('.job-details-jobs-unified-top-card__company-name')          ||
+    text('.jobs-unified-top-card__company-name a')                    ||
+    text('.jobs-unified-top-card__company-name')                      ||
+    text('.topcard__org-name');
+
+  // Location — first bullet span; LinkedIn orders it: location · type · posted
+  const location =
+    text('.job-details-jobs-unified-top-card__bullet')                ||
+    text('.jobs-unified-top-card__bullet')                            ||
+    text('.topcard__flavor--bullet')                                  ||
+    text('.job-details-jobs-unified-top-card__primary-description-container .tvm__text');
+
+  // Description — #job-details has been the stable container ID since ~2023;
+  // class-based selectors are fallbacks for older page versions
+  const description =
+    text('#job-details')                                              ||
+    text('.jobs-description-content__text--stretch')                 ||
+    text('.jobs-description-content__text')                          ||
+    text('.jobs-description__content');
+
+  return { title, company, location, description, url: window.location.href };
 }
 
 function scrapeIndeedVjk() {
