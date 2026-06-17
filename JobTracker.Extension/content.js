@@ -23,71 +23,99 @@ function indeedVjk(url) {
 // ── LinkedIn ────────────────────────────────────────────────────────────────
 
 async function scrapeLinkedIn() {
-  // Only proceed when a specific job is selected.
-  // On the search results page this means currentJobId is present in the URL.
+  // Guard: only proceed when a specific job is selected in the panel.
   try {
-    const params = new URL(window.location.href).searchParams;
-    const isView = window.location.pathname.includes('/jobs/view/');
+    const params  = new URL(window.location.href).searchParams;
+    const isView  = window.location.pathname.includes('/jobs/view/');
     if (!params.has('currentJobId') && !isView) return null;
   } catch { return null; }
 
-  // LinkedIn renders the right panel after the URL updates.
-  // Poll until a title element appears (up to 6 seconds, every 300 ms).
-  const TITLE_SELECTORS = [
-    '.job-details-jobs-unified-top-card__job-title h1',
-    '.jobs-unified-top-card__job-title h1',
-    'h1.t-24.t-bold.inline',
-    '.job-details-jobs-unified-top-card__job-title',
-    '.jobs-unified-top-card__job-title',
-    'h1.t-24',
-  ];
-  await waitForAny(TITLE_SELECTORS, 6000);
+  // If this content script is running *inside* an iframe (all_frames: true
+  // and the iframe URL matches the pattern), scrape this document directly.
+  if (window !== window.top) {
+    await waitForEl('h1', document, 6000);
+    return scrapeLinkedInDoc(document);
+  }
 
-  // Title — try the h1 inside the container first; it avoids picking up
-  // stale text from adjacent elements.
+  // Main frame: the job detail panel lives inside one of the page's iframes.
+  // Poll until an iframe contains an h1 (the job title).
+  await waitForJobIframe(6000);
+
+  for (const iframe of document.querySelectorAll('iframe')) {
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (!doc?.querySelector('h1')?.innerText?.trim()) continue;
+      return scrapeLinkedInDoc(doc);
+    } catch {
+      // Cross-origin iframe — skip silently.
+      continue;
+    }
+  }
+
+  return null;
+}
+
+// Scrape the four job fields from any Document object (main doc or iframe doc).
+function scrapeLinkedInDoc(doc) {
+  const t = (sel) => doc.querySelector(sel)?.innerText?.trim() || '';
+
+  // Title: h1 is reliable regardless of surrounding class names.
   const title =
-    text('.job-details-jobs-unified-top-card__job-title h1')          ||
-    text('.jobs-unified-top-card__job-title h1')                      ||
-    text('h1.t-24.t-bold.inline')                                     ||
-    text('h1.t-24')                                                   ||
-    text('.job-details-jobs-unified-top-card__job-title')             ||
-    text('.jobs-unified-top-card__job-title');
+    t('.job-details-jobs-unified-top-card__job-title h1') ||
+    t('.jobs-unified-top-card__job-title h1')             ||
+    t('h1');
 
-  // Company — anchor inside the element gives the cleanest text.
+  // Company: try the stable class names, then a broad substring match.
   const company =
-    text('.job-details-jobs-unified-top-card__company-name a')        ||
-    text('.job-details-jobs-unified-top-card__company-name')          ||
-    text('.jobs-unified-top-card__company-name a')                    ||
-    text('.jobs-unified-top-card__company-name')                      ||
-    text('.topcard__org-name');
+    t('.job-details-jobs-unified-top-card__company-name a') ||
+    t('.job-details-jobs-unified-top-card__company-name')   ||
+    t('.jobs-unified-top-card__company-name a')             ||
+    t('.jobs-unified-top-card__company-name')               ||
+    t('[class*="company-name"] a')                          ||
+    t('[class*="company-name"]');
 
-  // Location — LinkedIn orders bullets: location · work-type · posted date.
-  // The first matching element is the location.
+  // Location: first bullet span — LinkedIn orders them location · type · date.
   const location =
-    text('.job-details-jobs-unified-top-card__bullet')                ||
-    text('.jobs-unified-top-card__bullet')                            ||
-    text('.topcard__flavor--bullet')                                  ||
-    text('.job-details-jobs-unified-top-card__primary-description-container .tvm__text');
+    t('.job-details-jobs-unified-top-card__bullet') ||
+    t('.jobs-unified-top-card__bullet')             ||
+    t('[class*="topcard__flavor--bullet"]')         ||
+    t('[class*="bullet"]');
 
-  // Description — #job-details is the stable container ID since ~2023.
+  // Description: #job-details is the stable ID since the 2023 redesign.
   const description =
-    text('#job-details')                                              ||
-    text('.jobs-description-content__text--stretch')                 ||
-    text('.jobs-description-content__text')                          ||
-    text('.jobs-description__content');
+    t('#job-details')                              ||
+    t('.jobs-description-content__text--stretch') ||
+    t('.jobs-description-content__text')          ||
+    t('.jobs-description__content');
 
   return { title, company, location, description, url: window.location.href };
 }
 
-// Resolves once any selector in the list has non-empty innerText, or on timeout.
-async function waitForAny(selectors, timeout) {
+// Poll until any iframe's document contains a non-empty h1, or timeout.
+async function waitForJobIframe(timeout) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
-    for (const sel of selectors) {
-      if (document.querySelector(sel)?.innerText?.trim()) return;
+    for (const iframe of document.querySelectorAll('iframe')) {
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (doc?.querySelector('h1')?.innerText?.trim()) return;
+      } catch {}
     }
-    await new Promise(r => setTimeout(r, 300));
+    await sleep(300);
   }
+}
+
+// Poll until selector exists with non-empty text in a given document, or timeout.
+async function waitForEl(selector, doc, timeout) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    if (doc.querySelector(selector)?.innerText?.trim()) return;
+    await sleep(300);
+  }
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
 }
 
 // ── Indeed (vjk panel) ──────────────────────────────────────────────────────
