@@ -44,7 +44,7 @@
     <!-- ── Authenticated views ── -->
     <div id="auth-view" class="hidden">
 
-      <!-- Loading -->
+      <!-- Loading (used for Indeed/Glassdoor scrape) -->
       <div id="view-loading" class="hidden">
         <div class="loading-box">
           <div class="spinner"></div>
@@ -64,7 +64,7 @@
         </div>
       </div>
 
-      <!-- No data scraped -->
+      <!-- Scrape failed (Indeed / Glassdoor only) -->
       <div id="view-nodata" class="hidden">
         <div class="info-box">
           <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#475569" stroke-width="1.5">
@@ -75,7 +75,7 @@
         </div>
       </div>
 
-      <!-- Job card -->
+      <!-- Auto-scraped job card (Indeed / Glassdoor) -->
       <div id="view-job" class="hidden">
         <div class="job-card">
           <div id="job-title" class="job-title"></div>
@@ -86,6 +86,32 @@
         </div>
         <button id="log-btn" class="btn btn-success">Log Application</button>
         <div id="log-error" class="error-msg hidden"></div>
+      </div>
+
+      <!-- LinkedIn manual entry form -->
+      <div id="view-manual" class="hidden">
+        <div class="manual-note">
+          <span class="li-badge">in</span>
+          LinkedIn detected — fill in the job details
+        </div>
+        <div class="field">
+          <label for="m-title">Job Title <span class="required">*</span></label>
+          <input id="m-title" type="text" placeholder="e.g. Software Engineer" />
+        </div>
+        <div class="field">
+          <label for="m-company">Company <span class="required">*</span></label>
+          <input id="m-company" type="text" placeholder="e.g. Acme Corp" />
+        </div>
+        <div class="field">
+          <label for="m-location">Location</label>
+          <input id="m-location" type="text" placeholder="e.g. Toronto, ON" />
+        </div>
+        <div class="field">
+          <label for="m-desc">Job Description</label>
+          <textarea id="m-desc" rows="6" placeholder="Paste the job description here so AI agents can analyze it…"></textarea>
+        </div>
+        <button id="manual-log-btn" class="btn btn-success">Log Application</button>
+        <div id="manual-log-error" class="error-msg hidden"></div>
       </div>
 
       <!-- Success -->

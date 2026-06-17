@@ -16,6 +16,10 @@ function isSupported(url) {
   return false;
 }
 
+function isLinkedIn(url) {
+  return url.includes('linkedin.com/jobs/');
+}
+
 // ── DOM refs ──────────────────────────────────────────────────────────────
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +31,7 @@ const views = {
   unsupported: $('view-unsupported'),
   nodata:      $('view-nodata'),
   job:         $('view-job'),
+  manual:      $('view-manual'),
   success:     $('view-success'),
 };
 
@@ -103,11 +108,11 @@ $('logout-btn').addEventListener('click', async () => {
 // ── authenticated view ─────────────────────────────────────────────────────
 
 let currentJobData = null;
+let manualUrl = '';
 
 async function enterAuthView(token, fullName) {
   $('user-row').classList.remove('hidden');
   $('user-name').textContent = fullName || '';
-  showOnly(views.auth, views.loading);
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const url = tab?.url || '';
@@ -117,6 +122,22 @@ async function enterAuthView(token, fullName) {
     return;
   }
 
+  // LinkedIn: never scrape — show the manual entry form instead.
+  if (isLinkedIn(url)) {
+    manualUrl = url;
+    $('m-title').value    = '';
+    $('m-company').value  = '';
+    $('m-location').value = '';
+    $('m-desc').value     = '';
+    clearError($('manual-log-error'));
+    $('manual-log-btn').disabled = false;
+    $('manual-log-btn').textContent = 'Log Application';
+    showOnly(views.auth, views.manual);
+    return;
+  }
+
+  // Indeed / Glassdoor: auto-scrape via content script.
+  showOnly(views.auth, views.loading);
   try {
     const response = await sendMessageToTab(tab.id, { type: 'GET_JOB_DATA' });
     const job = response?.jobData;
@@ -127,9 +148,9 @@ async function enterAuthView(token, fullName) {
     }
 
     currentJobData = job;
-    $('job-title').textContent   = job.title    || '(no title)';
-    $('job-company').textContent = job.company  || '—';
-    $('job-location').textContent= job.location || '—';
+    $('job-title').textContent    = job.title    || '(no title)';
+    $('job-company').textContent  = job.company  || '—';
+    $('job-location').textContent = job.location || '—';
     showOnly(views.auth, views.job);
   } catch {
     showOnly(views.auth, views.nodata);
@@ -145,7 +166,7 @@ function sendMessageToTab(tabId, message) {
   });
 }
 
-// ── log application ────────────────────────────────────────────────────────
+// ── log application (auto-scraped) ────────────────────────────────────────
 
 $('log-btn').addEventListener('click', async () => {
   const logBtn  = $('log-btn');
@@ -190,6 +211,62 @@ $('log-btn').addEventListener('click', async () => {
     setError(errorEl, err.message || 'Something went wrong.');
     logBtn.disabled = false;
     logBtn.textContent = 'Log Application';
+  }
+});
+
+// ── log application (LinkedIn manual entry) ────────────────────────────────
+
+$('manual-log-btn').addEventListener('click', async () => {
+  const btn     = $('manual-log-btn');
+  const errorEl = $('manual-log-error');
+  clearError(errorEl);
+
+  const title   = $('m-title').value.trim();
+  const company = $('m-company').value.trim();
+
+  if (!title || !company) {
+    setError(errorEl, 'Job Title and Company are required.');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Logging…';
+
+  const { token } = await chrome.storage.local.get('token');
+
+  try {
+    const res = await fetch(`${API}/applications`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        jobTitle:       title,
+        company:        company,
+        location:       $('m-location').value.trim(),
+        jobUrl:         manualUrl,
+        jobDescription: $('m-desc').value.trim(),
+      }),
+    });
+
+    if (res.status === 401) {
+      await chrome.storage.local.remove(['token', 'fullName']);
+      showOnly(views.login);
+      return;
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Failed to log application.');
+    }
+
+    $('success-detail').textContent = `${title} at ${company}`;
+    showOnly(views.auth, views.success);
+  } catch (err) {
+    setError(errorEl, err.message || 'Something went wrong.');
+    btn.disabled = false;
+    btn.textContent = 'Log Application';
   }
 });
 
