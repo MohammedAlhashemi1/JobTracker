@@ -44,3 +44,9 @@ public class FollowUpResult
 {
     public string Email { get; set; } = string.Empty;
 }
+
+public class AnonymousAgentRequest
+{
+    public string JobDescription { get; set; } = string.Empty;
+    public string? ResumeBase64 { get; set; }
+}

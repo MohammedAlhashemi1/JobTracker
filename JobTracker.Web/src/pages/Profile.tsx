@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../lib/api';
+import { runPendingGenerate } from '../lib/generatePending';
 import type { UserProfile } from '../types';
 
 const EXPERIENCE_LEVELS = ['Junior', 'Mid', 'Senior'];
 
 export default function Profile() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const resumeRequired = searchParams.get('resumeRequired') === '1';
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -46,8 +51,12 @@ export default function Profile() {
       const { data } = await api.put<UserProfile>('/profile', form);
       setProfile(data);
       setFormDirty(false);
-      setSaveMsg('Saved!');
-      setTimeout(() => setSaveMsg(''), 2500);
+      // After saving profile, check if we have a pending generate job
+      const didGenerate = await runPendingGenerate(api, navigate);
+      if (!didGenerate) {
+        setSaveMsg('Saved!');
+        setTimeout(() => setSaveMsg(''), 2500);
+      }
     } catch {
       setSaveMsg('Failed to save.');
     } finally {
@@ -73,7 +82,11 @@ export default function Profile() {
         const base64 = reader.result as string;
         await api.post('/profile/resume', { resumeBase64: base64 });
         setProfile((p) => p ? { ...p, resumeUrl: base64 } : p);
-        setResumeMsg('Resume uploaded successfully.');
+        // If there's a pending generate job, fire it now that we have a resume
+        const didGenerate = await runPendingGenerate(api, navigate);
+        if (!didGenerate) {
+          setResumeMsg('Resume uploaded successfully.');
+        }
       } catch {
         setResumeMsg('Upload failed. Please try again.');
       } finally {
@@ -106,6 +119,55 @@ export default function Profile() {
           <h1 className="text-xl font-bold text-white">Profile</h1>
           <p className="text-sm text-slate-500 mt-0.5">Manage your account and preferences</p>
         </div>
+
+        {/* completion checklist */}
+        {(() => {
+          const checks = [
+            { label: 'Full name',        done: !!profile?.fullName?.trim()       },
+            { label: 'Experience level', done: !!profile?.experienceLevel        },
+            { label: 'Target roles',     done: !!profile?.targetRoles?.trim()    },
+            { label: 'Resume uploaded',  done: !!profile?.resumeUrl              },
+          ];
+          const completed = checks.filter((c) => c.done).length;
+          const allDone   = completed === checks.length;
+          return (
+            <div className={`border rounded-xl p-5 ${allDone ? 'bg-emerald-900/10 border-emerald-800/40' : 'bg-slate-900 border-slate-800'}`}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-white">Profile Setup</h2>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                  allDone
+                    ? 'bg-emerald-500/20 text-emerald-400'
+                    : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {completed}/{checks.length} complete
+                </span>
+              </div>
+              <div className="space-y-2">
+                {checks.map(({ label, done }) => (
+                  <div key={label} className="flex items-center gap-2.5">
+                    {done ? (
+                      <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-slate-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                      </svg>
+                    )}
+                    <span className={`text-sm ${done ? 'text-slate-400 line-through' : 'text-slate-300'}`}>
+                      {label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {allDone && (
+                <p className="text-xs text-emerald-400 mt-3">
+                  Your profile is complete — AI documents will use your full context.
+                </p>
+              )}
+            </div>
+          );
+        })()}
 
         {/* account info card */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
@@ -187,6 +249,17 @@ export default function Profile() {
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
           <h2 className="text-sm font-semibold text-white mb-1">Resume</h2>
           <p className="text-xs text-slate-500 mb-5">PDF or DOCX, max 5 MB. Stored securely for AI context.</p>
+
+          {resumeRequired && !profile?.resumeUrl && (
+            <div className="flex items-start gap-3 bg-amber-900/20 border border-amber-700/40 rounded-lg px-4 py-3 mb-4">
+              <svg className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+              <p className="text-sm text-amber-300 leading-relaxed">
+                Upload your resume to generate your documents. We need it to tailor results to your actual skills, education, and experience — without it the output is generic.
+              </p>
+            </div>
+          )}
 
           {profile?.resumeUrl && (
             <div className="flex items-center gap-3 bg-slate-800 rounded-lg px-4 py-3 mb-4">

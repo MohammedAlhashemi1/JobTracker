@@ -1,6 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import PrivateRoute from './components/PrivateRoute';
+import Landing from './pages/Landing';
+import Generate from './pages/Generate';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -13,12 +15,18 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          {/* public */}
+          <Route path="/"         element={<Landing />}  />
+          <Route path="/generate" element={<Generate />} />
+          <Route path="/login"    element={<Login />}    />
           <Route path="/register" element={<Register />} />
-          <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+
+          {/* protected */}
+          <Route path="/dashboard"    element={<PrivateRoute><Dashboard    /></PrivateRoute>} />
           <Route path="/applications" element={<PrivateRoute><Applications /></PrivateRoute>} />
-          <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
-          <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+          <Route path="/chat"         element={<PrivateRoute><Chat         /></PrivateRoute>} />
+          <Route path="/profile"      element={<PrivateRoute><Profile      /></PrivateRoute>} />
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>

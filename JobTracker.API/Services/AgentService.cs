@@ -365,6 +365,66 @@ Return only the subject line and email body. No extra commentary.
         return new FollowUpResult { Email = ExtractText(response) };
     }
 
+    public async Task<ResumeTailorResult> TailorResumeAnonymousAsync(string jobDescription, string? resumeBase64)
+    {
+        var resumeNote = !string.IsNullOrWhiteSpace(resumeBase64) && resumeBase64.StartsWith("data:application/pdf;base64,")
+            ? "\nThe candidate's full resume is attached as a PDF. Rewrite bullet points based on the actual experience shown in the resume, tailored to the job."
+            : "";
+
+        var system = $"""
+You are a professional resume writer specializing in tailoring resumes to specific job postings.{resumeNote}
+
+Rewrite resume bullet points specifically tailored to the job posting. For each bullet:
+- Match keywords from the job description exactly
+- Quantify achievements where possible
+- Lead with strong action verbs
+- Highlight what this specific employer cares about
+
+Return only the tailored bullet points as formatted text the candidate can copy directly into their resume.
+""";
+
+        var response = await _client.Messages.Create(new MessageCreateParams
+        {
+            Model = Model.ClaudeSonnet4_6,
+            MaxTokens = 4096,
+            System = system,
+            Messages = [new() { Role = "user", Content = BuildUserMessage($"Tailor my resume for this job:\n\n{jobDescription}", resumeBase64) }]
+        });
+
+        return new ResumeTailorResult { TailoredBullets = ExtractText(response) };
+    }
+
+    public async Task<CoverLetterResult> WriteCoverLetterAnonymousAsync(string jobDescription, string? resumeBase64)
+    {
+        var resumeNote = !string.IsNullOrWhiteSpace(resumeBase64) && resumeBase64.StartsWith("data:application/pdf;base64,")
+            ? "\nThe candidate's full resume is attached as a PDF. Draw specific details from their actual experience when writing the letter."
+            : "";
+
+        var system = $"""
+You are a professional cover letter writer. Write compelling, specific cover letters that get interviews.{resumeNote}
+
+Write a complete, ready-to-send cover letter that:
+- Opens with a strong hook tied to this specific company and role
+- Uses exact keywords from the job description naturally
+- Highlights the most relevant experience for this position
+- Shows genuine knowledge of what this role requires
+- Closes with a clear call to action
+- Includes standard formatting (date placeholder, company address placeholder, signature line)
+
+Write it as if you are the candidate. Make it sound human, not AI-generated.
+""";
+
+        var response = await _client.Messages.Create(new MessageCreateParams
+        {
+            Model = Model.ClaudeSonnet4_6,
+            MaxTokens = 4096,
+            System = system,
+            Messages = [new() { Role = "user", Content = BuildUserMessage($"Write a cover letter for this job:\n\n{jobDescription}", resumeBase64) }]
+        });
+
+        return new CoverLetterResult { CoverLetter = ExtractText(response) };
+    }
+
     private static bool HasResume(User user) =>
         !string.IsNullOrWhiteSpace(user.ResumeUrl) &&
         user.ResumeUrl.StartsWith("data:application/pdf;base64,");

@@ -28,7 +28,7 @@ export default function Register() {
     setLoading(true);
     try {
       await register(form);
-      navigate('/');
+      navigate('/dashboard');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??

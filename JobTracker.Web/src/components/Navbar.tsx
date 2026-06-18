@@ -2,10 +2,9 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const links = [
-  { to: '/', label: 'Dashboard' },
+  { to: '/dashboard',    label: 'Dashboard'    },
   { to: '/applications', label: 'Applications' },
-  { to: '/chat', label: 'AI Chat' },
-  { to: '/profile', label: 'Profile' },
+  { to: '/profile',      label: 'Profile'      },
 ];
 
 export default function Navbar() {
@@ -14,7 +13,7 @@ export default function Navbar() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/');
   };
 
   return (
@@ -34,7 +33,7 @@ export default function Navbar() {
             <NavLink
               key={to}
               to={to}
-              end={to === '/'}
+              end={to === '/dashboard'}
               className={({ isActive }) =>
                 `px-3 py-1.5 rounded-lg text-sm font-medium transition ${
                   isActive

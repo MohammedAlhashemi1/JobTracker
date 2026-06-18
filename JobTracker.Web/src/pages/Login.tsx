@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../lib/api';
+import { runPendingGenerate } from '../lib/generatePending';
 
 export default function Login() {
   const { login } = useAuth();
@@ -11,6 +13,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -18,13 +21,15 @@ export default function Login() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
+      setLoading(false);
+      setGenerating(true);
+      const didGenerate = await runPendingGenerate(api, navigate);
+      if (!didGenerate) navigate('/dashboard');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         'Invalid email or password.';
       setError(msg);
-    } finally {
       setLoading(false);
     }
   };
@@ -80,10 +85,10 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || generating}
               className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold rounded-lg px-4 py-2.5 text-sm transition"
             >
-              {loading ? 'Signing in…' : 'Sign in'}
+              {loading ? 'Signing in…' : generating ? 'Generating documents…' : 'Sign in'}
             </button>
           </form>
 
