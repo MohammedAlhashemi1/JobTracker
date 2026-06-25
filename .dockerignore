@@ -1,0 +1,15 @@
+# Exclude other projects — only JobTracker.API is needed for this image
+JobTracker.Web/
+JobTracker.Extension/
+
+# Build artifacts (dotnet publish generates its own clean output)
+JobTracker.API/bin/
+JobTracker.API/obj/
+
+# Local dev config that must NOT leak into the image
+JobTracker.API/appsettings.Development.json
+
+# Misc
+*.docx
+.git/
+.claude/
