@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../lib/api';
 import { runPendingGenerate } from '../lib/generatePending';
+import AiLimitModal from '../components/AiLimitModal';
 import type { UserProfile } from '../types';
 
 const EXPERIENCE_LEVELS = ['Junior', 'Mid', 'Senior'];
@@ -21,6 +22,7 @@ export default function Profile() {
 
   const [resumeUploading, setResumeUploading] = useState(false);
   const [resumeMsg, setResumeMsg] = useState('');
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -51,9 +53,10 @@ export default function Profile() {
       const { data } = await api.put<UserProfile>('/profile', form);
       setProfile(data);
       setFormDirty(false);
-      // After saving profile, check if we have a pending generate job
-      const didGenerate = await runPendingGenerate(api, navigate);
-      if (!didGenerate) {
+      const result = await runPendingGenerate(api, navigate);
+      if (result === 'limit') {
+        setShowLimitModal(true);
+      } else if (!result) {
         setSaveMsg('Saved!');
         setTimeout(() => setSaveMsg(''), 2500);
       }
@@ -79,12 +82,23 @@ export default function Profile() {
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        const base64 = reader.result as string;
+        let base64 = reader.result as string;
+        // Browsers on Windows often report .docx as application/octet-stream.
+        // Normalize to the correct MIME type so the backend and isDocx() check work.
+        if (base64.startsWith('data:application/octet-stream')) {
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          if (ext === 'docx') {
+            base64 = base64.replace('data:application/octet-stream', 'data:application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+          } else if (ext === 'doc') {
+            base64 = base64.replace('data:application/octet-stream', 'data:application/msword');
+          }
+        }
         await api.post('/profile/resume', { resumeBase64: base64 });
         setProfile((p) => p ? { ...p, resumeUrl: base64 } : p);
-        // If there's a pending generate job, fire it now that we have a resume
-        const didGenerate = await runPendingGenerate(api, navigate);
-        if (!didGenerate) {
+        const result = await runPendingGenerate(api, navigate);
+        if (result === 'limit') {
+          setShowLimitModal(true);
+        } else if (!result) {
           setResumeMsg('Resume uploaded successfully.');
         }
       } catch {
@@ -114,6 +128,7 @@ export default function Profile() {
 
   return (
     <Layout>
+      {showLimitModal && <AiLimitModal onClose={() => setShowLimitModal(false)} />}
       <div className="max-w-2xl space-y-6">
         <div>
           <h1 className="text-xl font-bold text-white">Profile</h1>

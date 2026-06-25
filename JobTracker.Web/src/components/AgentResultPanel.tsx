@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { JobMatchResult, EmailInterpretResult } from '../types';
+import MarkdownContent from './MarkdownContent';
 
 interface BaseProps {
   title: string;
@@ -104,7 +105,7 @@ export default function AgentResultPanel(props: AgentResultPanelProps) {
       {props.type === 'text' && (
         <div className="p-4">
           <div className="max-h-72 overflow-y-auto bg-slate-900 rounded-lg p-3 mb-3">
-            <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{props.content}</p>
+            <MarkdownContent content={props.content} />
           </div>
           <button
             onClick={() => copy(props.content)}

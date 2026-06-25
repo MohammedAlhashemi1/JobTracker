@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import Layout from '../components/Layout';
 import api from '../lib/api';
-import type { Application } from '../types';
+import type { Application, PagedResult } from '../types';
 
 const STATUSES = ['Applied', 'Responded', 'InterviewScheduled', 'Offer', 'Rejected', 'Ghosted'];
 
@@ -70,8 +70,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<Application[]>('/applications')
-      .then((r) => setApps(r.data))
+    // Issue 6: /applications now returns PagedResult<Application>.
+    // pageSize=500 loads all applications for the dashboard stats and pipeline board.
+    api.get<PagedResult<Application>>('/applications?pageSize=500')
+      .then((r) => setApps(r.data.items))
       .finally(() => setLoading(false));
   }, []);
 
@@ -110,6 +112,39 @@ export default function Dashboard() {
             <StatCard label="Offers"         value={offers}                 />
           </div>
         )}
+
+        {/* Quick actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Link
+            to="/chat"
+            className="group bg-violet-600/10 hover:bg-violet-600/20 border border-violet-500/30 hover:border-violet-500/50 rounded-xl p-5 transition flex items-center gap-4"
+          >
+            <div className="w-10 h-10 rounded-lg bg-violet-600 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white group-hover:text-violet-300 transition">AI Chat</p>
+              <p className="text-xs text-slate-500 mt-0.5">Ask your AI coach anything about your job search</p>
+            </div>
+          </Link>
+
+          <Link
+            to="/applications"
+            className="group bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 rounded-xl p-5 transition flex items-center gap-4"
+          >
+            <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center shrink-0">
+              <svg className="w-5 h-5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">Track Applications</p>
+              <p className="text-xs text-slate-500 mt-0.5">Log jobs, run match analysis, prep for interviews</p>
+            </div>
+          </Link>
+        </div>
 
         {/* Pipeline board */}
         <div>

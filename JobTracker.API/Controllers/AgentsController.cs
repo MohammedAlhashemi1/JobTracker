@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using JobTracker.API.DTOs;
+using JobTracker.API.Filters;
 using JobTracker.API.Services;
 
 namespace JobTracker.API.Controllers;
@@ -9,6 +11,8 @@ namespace JobTracker.API.Controllers;
 [ApiController]
 [Route("api/agents")]
 [Authorize]
+[EnableRateLimiting("ai-policy")]
+[ServiceFilter(typeof(AiCallLimitFilter))]
 public class AgentsController : ControllerBase
 {
     private readonly AgentService _agents;

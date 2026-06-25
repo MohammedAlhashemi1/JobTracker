@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import { runPendingGenerate } from '../lib/generatePending';
+import AiLimitModal from '../components/AiLimitModal';
 
 export default function Landing() {
   const { user, loading } = useAuth();
@@ -11,6 +12,7 @@ export default function Landing() {
   const [jobDescription, setJobDescription] = useState('');
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   if (loading) return null;
 
@@ -31,7 +33,11 @@ export default function Landing() {
     // Logged-in: generate immediately using profile data
     setGenerating(true);
     try {
-      await runPendingGenerate(api, navigate);
+      const result = await runPendingGenerate(api, navigate);
+      if (result === 'limit') {
+        setShowLimitModal(true);
+        setGenerating(false);
+      }
     } catch {
       localStorage.removeItem('pendingJob');
       setError('Something went wrong. Please try again.');
@@ -40,6 +46,8 @@ export default function Landing() {
   };
 
   return (
+    <>
+    {showLimitModal && <AiLimitModal onClose={() => setShowLimitModal(false)} />}
     <div className="min-h-screen bg-slate-950 flex flex-col">
       {/* minimal header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60">
@@ -173,5 +181,6 @@ export default function Landing() {
         </a>
       </footer>
     </div>
+    </>
   );
 }

@@ -29,6 +29,14 @@ public class AiController : ControllerBase
         }
     }
 
+    // Issue 7: load last 50 messages so the frontend can hydrate on mount.
+    [HttpGet("history")]
+    public async Task<IActionResult> GetHistory()
+    {
+        var result = await _ai.GetHistoryAsync(GetUserId());
+        return Ok(result);
+    }
+
     [HttpGet("insights")]
     public async Task<IActionResult> GetInsights()
     {

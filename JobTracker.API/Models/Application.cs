@@ -9,7 +9,7 @@ public class Application
     public string Location { get; set; } = string.Empty;
     public string? JobUrl { get; set; }
     public string? JobDescription { get; set; }
-    public string Status { get; set; } = "Applied";
+    public ApplicationStatus Status { get; set; } = ApplicationStatus.Applied;
     public string? Notes { get; set; }
     public string? CoverLetter { get; set; }
     public string? TailoredResume { get; set; }

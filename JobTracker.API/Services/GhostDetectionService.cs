@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using JobTracker.API.Data;
+using JobTracker.API.Models;
 
 namespace JobTracker.API.Services;
 
@@ -31,14 +32,14 @@ public class GhostDetectionService : BackgroundService
         var cutoff = DateTime.UtcNow.AddDays(-30);
 
         var stale = await db.Applications
-            .Where(a => a.Status == "Applied" && a.AppliedAt < cutoff)
+            .Where(a => a.Status == ApplicationStatus.Applied && a.AppliedAt < cutoff)
             .ToListAsync();
 
         if (stale.Count == 0) return;
 
         foreach (var app in stale)
         {
-            app.Status = "Ghosted";
+            app.Status = ApplicationStatus.Ghosted;
             app.IsAutoGhosted = true;
             app.UpdatedAt = DateTime.UtcNow;
         }

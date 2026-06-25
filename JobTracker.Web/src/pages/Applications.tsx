@@ -3,16 +3,21 @@ import { useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout';
 import StatusBadge from '../components/StatusBadge';
 import AgentResultPanel from '../components/AgentResultPanel';
+import MarkdownContent from '../components/MarkdownContent';
+import AiLimitModal from '../components/AiLimitModal';
 import api from '../lib/api';
 import { downloadDocx } from '../lib/downloadDocx';
 import type {
   Application,
+  PagedResult,
   CreateApplicationRequest,
   UpdateApplicationRequest,
   JobMatchResult,
   ResumeTailorResult,
   CoverLetterResult,
   InterviewPrepResult,
+  FollowUpResult,
+  StrategyResult,
 } from '../types';
 
 const STATUSES = ['Applied', 'Responded', 'InterviewScheduled', 'Offer', 'Rejected', 'Ghosted'];
@@ -36,7 +41,7 @@ function Drawer({
   const [deleting, setDeleting] = useState(false);
 
   // agent state
-  type AgentKey = 'match' | 'resume-tailor' | 'cover-letter';
+  type AgentKey = 'match' | 'resume-tailor' | 'cover-letter' | 'interview-prep' | 'follow-up' | 'strategy';
   type AgentResult =
     | { type: 'match'; data: JobMatchResult }
     | { type: 'text'; label: string; data: string };
@@ -45,6 +50,7 @@ function Drawer({
   const [agentLoading, setAgentLoading] = useState(false);
   const [agentResult, setAgentResult] = useState<AgentResult | null>(null);
   const [agentError, setAgentError] = useState('');
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   // saved doc state — initialised from DB, updated after agent runs
   const [savedCoverLetter, setSavedCoverLetter] = useState<string | null>(app.coverLetter ?? null);
@@ -67,16 +73,30 @@ function Drawer({
         setAgentResult({ type: 'match', data });
       } else if (key === 'resume-tailor') {
         const { data } = await api.post<ResumeTailorResult>(`/agents/resume-tailor/${app.id}`);
-        setSavedTailoredResume(data.tailoredBullets);
-        onUpdated({ ...app, tailoredResume: data.tailoredBullets });
+        setSavedTailoredResume(data.tailoredResume);
+        onUpdated({ ...app, tailoredResume: data.tailoredResume });
       } else if (key === 'cover-letter') {
         const { data } = await api.post<CoverLetterResult>(`/agents/cover-letter/${app.id}`);
         setSavedCoverLetter(data.coverLetter);
         onUpdated({ ...app, coverLetter: data.coverLetter });
+      } else if (key === 'interview-prep') {
+        const { data } = await api.post<InterviewPrepResult>(`/agents/interview-prep/${app.id}`);
+        setAgentResult({ type: 'text', label: 'Interview Prep', data: data.prep });
+      } else if (key === 'follow-up') {
+        const { data } = await api.post<FollowUpResult>(`/agents/follow-up/${app.id}`);
+        setAgentResult({ type: 'text', label: 'Follow-up Email', data: data.email });
+      } else if (key === 'strategy') {
+        const { data } = await api.post<StrategyResult>('/agents/strategy');
+        setAgentResult({ type: 'text', label: 'Job Strategy', data: data.report });
       }
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setAgentError(msg || 'Agent failed. Please try again.');
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 403) {
+        setShowLimitModal(true);
+      } else {
+        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+        setAgentError(msg || 'Agent failed. Please try again.');
+      }
     } finally {
       setAgentLoading(false);
     }
@@ -112,6 +132,8 @@ function Drawer({
   }, [onClose]);
 
   return (
+    <>
+    {showLimitModal && <AiLimitModal onClose={() => setShowLimitModal(false)} />}
     <div className="fixed inset-0 z-40 flex">
       {/* backdrop */}
       <div className="flex-1 bg-black/50" onClick={onClose} />
@@ -233,7 +255,7 @@ function Drawer({
               {savedInterviewPrep && interviewPrepExpanded && (
                 <div className="mb-3">
                   <div className="max-h-96 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg p-4 mb-2">
-                    <p className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">{savedInterviewPrep}</p>
+                    <MarkdownContent content={savedInterviewPrep} />
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -269,8 +291,13 @@ function Drawer({
                         setSavedInterviewPrep(data.prep);
                         onUpdated({ ...app, interviewPrep: data.prep });
                       } catch (err: unknown) {
-                        const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-                        setInterviewPrepError(msg || 'Failed to generate. Please try again.');
+                        const status = (err as { response?: { status?: number } })?.response?.status;
+                        if (status === 403) {
+                          setShowLimitModal(true);
+                        } else {
+                          const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+                          setInterviewPrepError(msg || 'Failed to generate. Please try again.');
+                        }
                       } finally {
                         setInterviewPrepLoading(false);
                       }
@@ -395,9 +422,12 @@ function Drawer({
             {!pendingAgent && !agentLoading && (
               <div className="flex flex-wrap gap-2">
                 {[
-                  { key: 'match' as AgentKey,        label: 'Analyze Match' },
-                  { key: 'resume-tailor' as AgentKey, label: 'Tailor Resume' },
-                  { key: 'cover-letter' as AgentKey,  label: 'Cover Letter'  },
+                  { key: 'match' as AgentKey,          label: 'Analyze Match'   },
+                  { key: 'resume-tailor' as AgentKey,  label: 'Tailor Resume'   },
+                  { key: 'cover-letter' as AgentKey,   label: 'Cover Letter'    },
+                  { key: 'interview-prep' as AgentKey, label: 'Interview Prep'  },
+                  { key: 'follow-up' as AgentKey,      label: 'Follow-up Email' },
+                  { key: 'strategy' as AgentKey,       label: 'Job Strategy'    },
                 ].map(({ key, label }) => (
                   <button
                     key={key}
@@ -443,6 +473,7 @@ function Drawer({
         </div>
       </div>
     </div>
+    </>
   );
 }
 
@@ -587,8 +618,12 @@ function AddModal({
 
 // ── Page ───────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 50;
+
 export default function Applications() {
   const [apps, setApps] = useState<Application[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Application | null>(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -600,11 +635,19 @@ export default function Applications() {
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
 
-  useEffect(() => {
-    api.get<Application[]>('/applications')
-      .then((r) => setApps(r.data))
+  // Issue 6: fetch a single page of applications.
+  const fetchPage = (p: number) => {
+    setLoading(true);
+    api.get<PagedResult<Application>>(`/applications?page=${p}&pageSize=${PAGE_SIZE}`)
+      .then((r) => {
+        setApps(r.data.items);
+        setTotalCount(r.data.totalCount);
+        setPage(r.data.page);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { fetchPage(1); }, []);
 
   // auto-open drawer when navigated here with ?id=<appId>
   useEffect(() => {
@@ -644,7 +687,7 @@ export default function Applications() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-white">Applications</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{apps.length} total</p>
+            <p className="text-sm text-slate-500 mt-0.5">{totalCount} total</p>
           </div>
           <button
             onClick={() => setShowAdd(true)}
@@ -744,6 +787,31 @@ export default function Applications() {
             </table>
           )}
         </div>
+
+        {/* Issue 6: pagination controls */}
+        {totalCount > PAGE_SIZE && (
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-xs text-slate-500">
+              Page {page} of {Math.ceil(totalCount / PAGE_SIZE)} · {totalCount} total
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => fetchPage(page - 1)}
+                disabled={page <= 1}
+                className="text-xs border border-slate-700 bg-slate-900 text-slate-400 hover:text-white disabled:opacity-40 px-3 py-1.5 rounded-lg transition"
+              >
+                ← Previous
+              </button>
+              <button
+                onClick={() => fetchPage(page + 1)}
+                disabled={page >= Math.ceil(totalCount / PAGE_SIZE)}
+                className="text-xs border border-slate-700 bg-slate-900 text-slate-400 hover:text-white disabled:opacity-40 px-3 py-1.5 rounded-lg transition"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {selected && (

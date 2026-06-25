@@ -10,7 +10,7 @@ public class JobMatchResult
 
 public class ResumeTailorResult
 {
-    public string TailoredBullets { get; set; } = string.Empty;
+    public string TailoredResume { get; set; } = string.Empty;
 }
 
 public class CoverLetterResult

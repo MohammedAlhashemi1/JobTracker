@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import { runPendingGenerate } from '../lib/generatePending';
+import AiLimitModal from '../components/AiLimitModal';
 
 export default function Login() {
   const { login } = useAuth();
@@ -14,6 +15,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -23,8 +25,13 @@ export default function Login() {
       await login(email, password);
       setLoading(false);
       setGenerating(true);
-      const didGenerate = await runPendingGenerate(api, navigate);
-      if (!didGenerate) navigate('/dashboard');
+      const result = await runPendingGenerate(api, navigate);
+      if (result === 'limit') {
+        setShowLimitModal(true);
+        setGenerating(false);
+      } else if (!result) {
+        navigate('/dashboard');
+      }
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -35,6 +42,8 @@ export default function Login() {
   };
 
   return (
+    <>
+    {showLimitModal && <AiLimitModal onClose={() => setShowLimitModal(false)} />}
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
@@ -101,5 +110,6 @@ export default function Login() {
         </div>
       </div>
     </div>
+    </>
   );
 }

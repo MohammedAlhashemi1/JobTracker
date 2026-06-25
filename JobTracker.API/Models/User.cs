@@ -9,6 +9,7 @@ public class User
     public string ExperienceLevel { get; set; } = string.Empty;
     public string TargetRoles { get; set; } = string.Empty;
     public string? ResumeUrl { get; set; }
+    public int AiCallsUsed { get; set; } = 0;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Application> Applications { get; set; } = new List<Application>();

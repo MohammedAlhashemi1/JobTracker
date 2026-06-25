@@ -64,8 +64,18 @@ export default function Chat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    api.get<Array<{ role: string; content: string }>>('/ai/history')
+      .then((r) => {
+        setMessages(r.data.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })));
+      })
+      .catch(() => { /* start fresh on error */ })
+      .finally(() => setHistoryLoading(false));
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -120,7 +130,14 @@ export default function Chat() {
       <div className="flex-1 flex flex-col overflow-hidden max-w-4xl mx-auto w-full">
         {/* messages */}
         <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
-          {messages.length === 0 && !loading && (
+          {historyLoading && (
+            <div className="flex flex-col items-center justify-center h-full gap-4 pb-12">
+              <div className="w-7 h-7 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+              <p className="text-xs text-slate-500">Loading conversation history…</p>
+            </div>
+          )}
+
+          {messages.length === 0 && !loading && !historyLoading && (
             <div className="flex flex-col items-center justify-center h-full gap-8 pb-12">
               <div className="text-center">
                 <div className="w-12 h-12 rounded-full bg-indigo-600/20 flex items-center justify-center mx-auto mb-4">
@@ -167,13 +184,13 @@ export default function Chat() {
               onChange={(e) => { setInput(e.target.value); autoResize(); }}
               onKeyDown={handleKeyDown}
               placeholder="Ask about your job search… (Enter to send, Shift+Enter for newline)"
-              disabled={loading}
+              disabled={loading || historyLoading}
               className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 resize-none focus:outline-none leading-relaxed disabled:opacity-50"
               style={{ maxHeight: '120px' }}
             />
             <button
               onClick={() => send(input)}
-              disabled={!input.trim() || loading}
+              disabled={!input.trim() || loading || historyLoading}
               className="shrink-0 w-8 h-8 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center transition"
             >
               <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">

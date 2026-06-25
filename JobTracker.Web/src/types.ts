@@ -1,3 +1,11 @@
+// Issue 6: paginated response wrapper returned by GET /api/applications
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface AuthResponse {
   token: string;
   fullName: string;
@@ -77,7 +85,7 @@ export interface JobMatchResult {
 }
 
 export interface ResumeTailorResult {
-  tailoredBullets: string;
+  tailoredResume: string;
 }
 
 export interface CoverLetterResult {

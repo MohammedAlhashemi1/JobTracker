@@ -44,16 +44,16 @@ public class AiService
 
         var messages = history.Select(m => new MessageParam
         {
-            Role = m.Role == "user" ? "user" : "assistant",
+            Role    = m.Role == "user" ? "user" : "assistant",
             Content = m.Content
         }).ToList();
 
         var response = await _client.Messages.Create(new MessageCreateParams
         {
-            Model = Model.ClaudeSonnet4_6,
+            Model     = Model.ClaudeSonnet4_6,
             MaxTokens = 2048,
-            System = systemPrompt,
-            Messages = messages
+            System    = systemPrompt,
+            Messages  = messages
         });
 
         var assistantContent = ExtractText(response);
@@ -63,6 +63,23 @@ public class AiService
         await _db.SaveChangesAsync();
 
         return new ChatResponseDto { Content = assistantContent, CreatedAt = assistantMsg.CreatedAt };
+    }
+
+    // Issue 7: return last 50 messages for the chat history mount.
+    public async Task<List<ChatResponseDto>> GetHistoryAsync(int userId)
+    {
+        return await _db.ChatMessages
+            .Where(m => m.UserId == userId)
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(50)
+            .OrderBy(m => m.CreatedAt)
+            .Select(m => new ChatResponseDto
+            {
+                Role      = m.Role,
+                Content   = m.Content,
+                CreatedAt = m.CreatedAt
+            })
+            .ToListAsync();
     }
 
     public async Task<string[]> GetInsightsAsync(int userId)
@@ -85,8 +102,8 @@ public class AiService
                 a.JobTitle,
                 a.Company,
                 a.Location,
-                a.Status,
-                AppliedAt = a.AppliedAt.ToString("yyyy-MM-dd")
+                Status     = a.Status.ToString(),
+                AppliedAt  = a.AppliedAt.ToString("yyyy-MM-dd")
             })
         });
 
@@ -100,9 +117,9 @@ Return format: ["insight 1", "insight 2", "insight 3"]
 
         var response = await _client.Messages.Create(new MessageCreateParams
         {
-            Model = Model.ClaudeSonnet4_6,
+            Model     = Model.ClaudeSonnet4_6,
             MaxTokens = 256,
-            Messages = [new() { Role = "user", Content = prompt }]
+            Messages  = [new() { Role = "user", Content = prompt }]
         });
 
         var raw = ExtractText(response);
@@ -110,7 +127,7 @@ Return format: ["insight 1", "insight 2", "insight 3"]
         try
         {
             var start = raw.IndexOf('[');
-            var end = raw.LastIndexOf(']');
+            var end   = raw.LastIndexOf(']');
             if (start >= 0 && end > start)
                 raw = raw[start..(end + 1)];
             return JsonSerializer.Deserialize<string[]>(raw) ?? [];
@@ -130,12 +147,15 @@ Return format: ["insight 1", "insight 2", "insight 3"]
 
     private static string BuildSystemPrompt(User user, List<Application> apps)
     {
-        var total = apps.Count;
-        var responded = apps.Count(a => a.Status is "Responded" or "InterviewScheduled" or "Offer");
-        var interviews = apps.Count(a => a.Status is "InterviewScheduled");
-        var offers = apps.Count(a => a.Status is "Offer");
-        var rejected = apps.Count(a => a.Status is "Rejected");
-        var ghosted = apps.Count(a => a.Status is "Ghosted");
+        // Issue 5: use .ToString() to serialise the enum to its string name.
+        var total      = apps.Count;
+        var responded  = apps.Count(a => a.Status is ApplicationStatus.Responded
+                                      or ApplicationStatus.InterviewScheduled
+                                      or ApplicationStatus.Offer);
+        var interviews = apps.Count(a => a.Status is ApplicationStatus.InterviewScheduled);
+        var offers     = apps.Count(a => a.Status == ApplicationStatus.Offer);
+        var rejected   = apps.Count(a => a.Status == ApplicationStatus.Rejected);
+        var ghosted    = apps.Count(a => a.Status == ApplicationStatus.Ghosted);
         var responseRate = total > 0 ? (responded * 100.0 / total) : 0;
 
         var recent = apps.Take(10)
@@ -146,7 +166,7 @@ Return format: ["insight 1", "insight 2", "insight 3"]
             a.JobTitle,
             a.Company,
             a.Location,
-            a.Status,
+            Status    = a.Status.ToString(),
             AppliedAt = a.AppliedAt.ToString("yyyy-MM-dd")
         }));
 

@@ -1,11 +1,27 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { downloadDocx } from '../lib/downloadDocx';
+import { downloadDocx, resumeToPreviewText } from '../lib/downloadDocx';
 
 interface GenerateState {
-  tailoredResume: string;
+  tailoredResume?: string;
+  tailoredResumeDocx?: string; // base64 DOCX when design-preserve was used
   coverLetter: string;
+}
+
+function downloadBase64Docx(base64: string, filename: string) {
+  const byteChars = atob(base64);
+  const bytes = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = filename.endsWith('.docx') ? filename : `${filename}.docx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 export default function Generate() {
@@ -16,21 +32,33 @@ export default function Generate() {
 
   const [activeTab, setActiveTab] = useState<'resume' | 'coverLetter'>('resume');
   const [copied, setCopied] = useState(false);
+  // Default to "Keep my design" when a preserved DOCX is available
+  const [useMyDesign, setUseMyDesign] = useState(!!state?.tailoredResumeDocx);
 
   useEffect(() => {
-    if (!state?.tailoredResume && !state?.coverLetter) {
+    if (!state?.tailoredResume && !state?.tailoredResumeDocx && !state?.coverLetter) {
       navigate('/', { replace: true });
     }
   }, [state, navigate]);
 
   if (!state) return null;
 
-  const content    = activeTab === 'resume' ? state.tailoredResume : state.coverLetter;
-  const docxName   = activeTab === 'resume' ? 'tailored-resume' : 'cover-letter';
-  const docxTitle  = activeTab === 'resume' ? 'Tailored Resume Bullets' : 'Cover Letter';
+  const hasDocx   = !!state.tailoredResumeDocx;
+  // DOCX-preserve mode: user has a preserved DOCX and has chosen "Keep my design"
+  const isDocxMode = hasDocx && activeTab === 'resume' && useMyDesign;
+
+  const rawContent = activeTab === 'resume'
+    ? (state.tailoredResume ?? '')
+    : state.coverLetter;
+  const content = isDocxMode
+    ? '✅ Your resume was tailored while preserving your original design.\n\nClick "Download .docx" to get the updated file — it keeps your original formatting, fonts, and layout. Only the profile, bullets, and skills were updated to match this role.'
+    : (activeTab === 'resume' ? resumeToPreviewText(rawContent) : rawContent);
+
+  const docxName = activeTab === 'resume' ? 'tailored-resume' : 'cover-letter';
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(content);
+    // In DOCX-preserve mode, copy the plain-text version extracted from the preserved file
+    navigator.clipboard.writeText(isDocxMode ? content : content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -48,15 +76,26 @@ export default function Generate() {
           <span className="text-white font-semibold text-sm">Job Tracker</span>
         </Link>
         <div className="flex items-center gap-3">
-          <Link to="/login" className="text-sm text-slate-400 hover:text-white transition">
-            Sign in
-          </Link>
-          <Link
-            to="/register"
-            className="text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-1.5 rounded-lg transition"
-          >
-            Save & track free
-          </Link>
+          {user ? (
+            <Link
+              to="/dashboard"
+              className="text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-1.5 rounded-lg transition"
+            >
+              Dashboard →
+            </Link>
+          ) : (
+            <>
+              <Link to="/login" className="text-sm text-slate-400 hover:text-white transition">
+                Sign in
+              </Link>
+              <Link
+                to="/register"
+                className="text-sm bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-1.5 rounded-lg transition"
+              >
+                Save & track free
+              </Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -72,14 +111,14 @@ export default function Generate() {
               <span className="text-xs font-medium text-emerald-300">Documents ready</span>
             </div>
             <h1 className="text-2xl font-bold text-white">Your documents are ready</h1>
-            <p className="text-sm text-slate-400 mt-1">Copy or download below. Create a free account to save and track this application.</p>
+            <p className="text-sm text-slate-400 mt-1">Your resume text is optimized for this role — same jobs, same experience, keywords and phrasing adjusted to match the posting. Download and paste into your template.</p>
           </div>
 
           {/* tabs */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
             <div className="flex border-b border-slate-800">
               {([
-                { key: 'resume',      label: 'Tailored Resume Bullets' },
+                { key: 'resume',      label: 'Tailored Resume'         },
                 { key: 'coverLetter', label: 'Cover Letter'            },
               ] as const).map(({ key, label }) => (
                 <button
@@ -98,6 +137,28 @@ export default function Generate() {
 
             {/* document content */}
             <div className="p-5">
+              {/* Design toggle — only shown on resume tab when a preserved DOCX is available */}
+              {activeTab === 'resume' && hasDocx && (
+                <div className="flex items-center gap-1 p-1 bg-slate-800/60 border border-slate-700 rounded-lg mb-4">
+                  <button
+                    onClick={() => setUseMyDesign(true)}
+                    className={`flex-1 text-xs font-medium py-1.5 px-3 rounded-md transition ${
+                      useMyDesign ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    Keep my design
+                  </button>
+                  <button
+                    onClick={() => setUseMyDesign(false)}
+                    className={`flex-1 text-xs font-medium py-1.5 px-3 rounded-md transition ${
+                      !useMyDesign ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    Use our template
+                  </button>
+                </div>
+              )}
+
               <div className="bg-slate-800 rounded-xl p-5 max-h-[480px] overflow-y-auto">
                 <pre className="text-sm text-slate-200 whitespace-pre-wrap leading-relaxed font-sans">
                   {content}
@@ -127,7 +188,11 @@ export default function Generate() {
                   )}
                 </button>
                 <button
-                  onClick={() => downloadDocx(docxName, content)}
+                  onClick={() =>
+                    isDocxMode
+                      ? downloadBase64Docx(state.tailoredResumeDocx!, docxName)
+                      : downloadDocx(docxName, rawContent)
+                  }
                   className="flex items-center justify-center gap-2 text-sm border border-slate-700 bg-slate-800 hover:border-slate-600 text-slate-300 hover:text-white px-5 py-2.5 rounded-lg transition"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

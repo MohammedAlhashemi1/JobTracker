@@ -27,7 +27,9 @@ public class AppDbContext : DbContext
             e.Property(a => a.JobTitle).HasMaxLength(512).IsRequired();
             e.Property(a => a.Company).HasMaxLength(512).IsRequired();
             e.Property(a => a.Location).HasMaxLength(512);
-            e.Property(a => a.Status).HasMaxLength(50);
+            // Store enum as its string name so the DB column stays nvarchar(50)
+            // and no data migration is needed (existing rows already contain the names).
+            e.Property(a => a.Status).HasMaxLength(50).HasConversion<string>();
             e.Property(a => a.JobDescription).HasColumnType("nvarchar(max)");
             e.Property(a => a.Notes).HasMaxLength(4000);
             e.HasOne(a => a.User)

@@ -14,13 +14,28 @@ public class ApplicationService
         _db = db;
     }
 
-    public async Task<List<ApplicationResponseDto>> GetAllAsync(int userId)
+    // Issue 6: pagination. Callers pass page/pageSize; page is 1-based.
+    public async Task<PagedResult<ApplicationResponseDto>> GetAllAsync(
+        int userId, int page = 1, int pageSize = 50)
     {
-        var apps = await _db.Applications
-            .Where(a => a.UserId == userId)
+        page     = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 500);
+
+        var query = _db.Applications.Where(a => a.UserId == userId);
+        var total = await query.CountAsync();
+        var items = await query
             .OrderByDescending(a => a.AppliedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
-        return apps.Select(MapToDto).ToList();
+
+        return new PagedResult<ApplicationResponseDto>
+        {
+            Items     = items.Select(MapToDto),
+            TotalCount = total,
+            Page      = page,
+            PageSize  = pageSize
+        };
     }
 
     public async Task<ApplicationResponseDto?> GetByIdAsync(int id, int userId)
@@ -34,16 +49,16 @@ public class ApplicationService
     {
         var app = new Application
         {
-            UserId = userId,
-            JobTitle = dto.JobTitle,
-            Company = dto.Company,
-            Location = dto.Location,
-            JobUrl = dto.JobUrl,
+            UserId         = userId,
+            JobTitle       = dto.JobTitle,
+            Company        = dto.Company,
+            Location       = dto.Location,
+            JobUrl         = dto.JobUrl,
             JobDescription = dto.JobDescription,
-            Notes = dto.Notes,
-            Status = "Applied",
-            AppliedAt = dto.AppliedAt?.ToUniversalTime() ?? DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            Notes          = dto.Notes,
+            Status         = ApplicationStatus.Applied,
+            AppliedAt      = dto.AppliedAt?.ToUniversalTime() ?? DateTime.UtcNow,
+            UpdatedAt      = DateTime.UtcNow
         };
 
         _db.Applications.Add(app);
@@ -58,17 +73,18 @@ public class ApplicationService
 
         if (app is null) return null;
 
-        if (dto.JobTitle is not null) app.JobTitle = dto.JobTitle;
-        if (dto.Company is not null) app.Company = dto.Company;
-        if (dto.Location is not null) app.Location = dto.Location;
-        if (dto.JobUrl is not null) app.JobUrl = dto.JobUrl;
+        if (dto.JobTitle       is not null) app.JobTitle       = dto.JobTitle;
+        if (dto.Company        is not null) app.Company        = dto.Company;
+        if (dto.Location       is not null) app.Location       = dto.Location;
+        if (dto.JobUrl         is not null) app.JobUrl         = dto.JobUrl;
         if (dto.JobDescription is not null) app.JobDescription = dto.JobDescription;
-        if (dto.Notes is not null) app.Notes = dto.Notes;
-        if (dto.Status is not null)
+        if (dto.Notes          is not null) app.Notes          = dto.Notes;
+
+        // Issue 5: parse the validated status string into the enum.
+        if (dto.Status is not null && Enum.TryParse<ApplicationStatus>(dto.Status, out var parsed))
         {
-            app.Status = dto.Status;
-            // Clear auto-ghost flag when status is manually changed
-            if (app.IsAutoGhosted && dto.Status != "Ghosted")
+            app.Status = parsed;
+            if (app.IsAutoGhosted && parsed != ApplicationStatus.Ghosted)
                 app.IsAutoGhosted = false;
         }
 
@@ -91,20 +107,20 @@ public class ApplicationService
 
     private static ApplicationResponseDto MapToDto(Application a) => new()
     {
-        Id = a.Id,
-        UserId = a.UserId,
-        JobTitle = a.JobTitle,
-        Company = a.Company,
-        Location = a.Location,
-        JobUrl = a.JobUrl,
+        Id             = a.Id,
+        UserId         = a.UserId,
+        JobTitle       = a.JobTitle,
+        Company        = a.Company,
+        Location       = a.Location,
+        JobUrl         = a.JobUrl,
         JobDescription = a.JobDescription,
-        Status = a.Status,
-        Notes = a.Notes,
-        CoverLetter = a.CoverLetter,
+        Status         = a.Status.ToString(), // Issue 5: serialize enum → string for frontend
+        Notes          = a.Notes,
+        CoverLetter    = a.CoverLetter,
         TailoredResume = a.TailoredResume,
-        InterviewPrep = a.InterviewPrep,
-        AppliedAt = a.AppliedAt,
-        UpdatedAt = a.UpdatedAt,
-        IsAutoGhosted = a.IsAutoGhosted
+        InterviewPrep  = a.InterviewPrep,
+        AppliedAt      = a.AppliedAt,
+        UpdatedAt      = a.UpdatedAt,
+        IsAutoGhosted  = a.IsAutoGhosted
     };
 }

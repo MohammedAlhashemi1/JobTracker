@@ -24,8 +24,12 @@ public class UpdateApplicationDto
     public string? Location { get; set; }
     public string? JobUrl { get; set; }
     public string? JobDescription { get; set; }
-    public string? Status { get; set; }
     public string? Notes { get; set; }
+
+    // Issue 5: constrain to the known enum values at the DTO boundary.
+    [AllowedValues("Applied", "Responded", "InterviewScheduled", "Offer", "Rejected", "Ghosted",
+        ErrorMessage = "Status must be one of: Applied, Responded, InterviewScheduled, Offer, Rejected, Ghosted")]
+    public string? Status { get; set; }
 }
 
 public class ApplicationResponseDto

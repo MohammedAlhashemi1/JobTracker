@@ -1,10 +1,13 @@
 import type { AxiosInstance } from 'axios';
 import type { NavigateFunction } from 'react-router-dom';
 
+// Returns false  — no pending job
+//         true   — generation succeeded and navigated to results
+//         'limit' — user hit the 5-credit free tier limit
 export async function runPendingGenerate(
   api: AxiosInstance,
   navigate: NavigateFunction
-): Promise<boolean> {
+): Promise<boolean | 'limit'> {
   const pendingJob = localStorage.getItem('pendingJob');
   if (!pendingJob) return false;
 
@@ -15,18 +18,26 @@ export async function runPendingGenerate(
     return false;
   }
 
-  const payload = { jobDescription: pendingJob, resumeBase64: profile.resumeUrl };
+  const payload = { jobDescription: pendingJob };
 
-  const [tailorRes, coverRes] = await Promise.all([
-    api.post<{ tailoredBullets: string }>('/agents/anonymous/tailor', payload),
-    api.post<{ coverLetter: string }>('/agents/anonymous/cover-letter', payload),
+  const [preserveRes, tailorRes, coverRes] = await Promise.all([
+    api.post<string>('/agents/anonymous/tailor-preserve', payload, { validateStatus: () => true }),
+    api.post<{ tailoredResume: string }>('/agents/anonymous/tailor', payload, { validateStatus: () => true }),
+    api.post<{ coverLetter: string }>('/agents/anonymous/cover-letter', payload, { validateStatus: () => true }),
   ]);
 
+  if (preserveRes.status === 403 || tailorRes.status === 403 || coverRes.status === 403) {
+    localStorage.removeItem('pendingJob');
+    return 'limit';
+  }
+
   localStorage.removeItem('pendingJob');
-  navigate('/generate', {
+
+  navigate('/generate/results', {
     state: {
-      tailoredResume: tailorRes.data.tailoredBullets,
-      coverLetter:    coverRes.data.coverLetter,
+      tailoredResumeDocx: preserveRes.status === 200 && preserveRes.data ? preserveRes.data : undefined,
+      tailoredResume:     tailorRes.status === 200 ? tailorRes.data.tailoredResume : undefined,
+      coverLetter:        coverRes.status === 200 ? coverRes.data.coverLetter : '',
     },
   });
   return true;

@@ -20,10 +20,14 @@ public class ApplicationsController : ControllerBase
         _scraper = scraper;
     }
 
+    // Issue 6: page/pageSize are optional query params; defaults to page 1, 50 per page.
+    // Pass pageSize=1000 (or any large number, capped at 500 internally) to load all apps.
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
-        var result = await _service.GetAllAsync(GetUserId());
+        var result = await _service.GetAllAsync(GetUserId(), page, pageSize);
         return Ok(result);
     }
 
