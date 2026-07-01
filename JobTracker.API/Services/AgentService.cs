@@ -96,7 +96,7 @@ Candidate Profile:
 Rules:
 - CRITICAL: Output sections in EXACTLY the same order they appear in the candidate's original resume. Do not reorder, merge, or drop sections.
 - Keep every job title, company, date, and educational credential exactly as-is
-- Do NOT add skills, technologies, or achievements the candidate has not claimed
+- Do NOT add any named technology, tool, framework, cloud provider, or methodology that is not already explicitly present in the original resume text — not as a parenthetical, not as an implication, not as "familiarity." Reframe or reorder what is actually there; never extend it with inferred adjacent skills (e.g. if the resume lists Docker but not Kubernetes, do NOT add Kubernetes; if it lists Python but not AWS, do NOT add AWS or "cloud familiarity")
 - DO rewrite bullet points using keywords and phrasing from the job posting; lead each bullet with the clause most relevant to the job first
 - Write bullets with bold, confident language — open with strong action verbs (e.g. "Engineered," "Delivered," "Architected") and frame each accomplishment as proof the candidate can do this job, not just a description of what was done. This is a tone upgrade only: do NOT invent new facts, metrics, or claims — only rephrase existing true content more persuasively
 - For bullets covering experience clearly irrelevant to this role, compress to a shorter neutral phrase rather than full technical detail — do not invent new claims
@@ -440,7 +440,7 @@ You are a professional resume optimizer. Parse the candidate's resume, tailor th
 Rules:
 - CRITICAL: Output sections in EXACTLY the same order they appear in the candidate's original resume. Do not reorder, merge, or drop sections.
 - Keep every job, company, date, and educational credential exactly as-is
-- Do NOT fabricate skills or achievements
+- Do NOT add any named technology, tool, framework, cloud provider, or methodology that is not already explicitly present in the original resume text — not as a parenthetical, not as an implication, not as "familiarity." Reframe or reorder what is actually there; never extend it with inferred adjacent skills (e.g. if the resume lists Docker but not Kubernetes, do NOT add Kubernetes; if it lists Python but not AWS, do NOT add AWS or "cloud familiarity")
 - DO rewrite bullet points using keywords from the job posting; lead each bullet with the clause most relevant to the job first
 - Write bullets with bold, confident language — open with strong action verbs (e.g. "Engineered," "Delivered," "Architected") and frame each accomplishment as proof the candidate can do this job, not just a description of what was done. This is a tone upgrade only: do NOT invent new facts, metrics, or claims — only rephrase existing true content more persuasively
 - For bullets covering experience clearly irrelevant to this role, compress to a shorter neutral phrase rather than full technical detail — do not fabricate new claims
@@ -580,11 +580,11 @@ You are a professional resume optimizer. You receive a numbered list of paragrap
 
 What to do:
 - Long profile/summary text: rewrite using keywords from the job posting while keeping the candidate's real background
-- Skill lines ("Category: values"): reorder and strengthen with relevant terms from the posting — only use skills related to what the candidate already has
+- Skill lines ("Category: values"): reorder existing values and substitute job-relevant synonyms for skills already listed — do NOT add any tool, technology, cloud provider (e.g. AWS, Azure), or methodology (e.g. CI/CD, Agile) that is not already explicitly written in the paragraph text; trim or reorder, never expand
 - Bullet points (start with action verbs): rewrite leading with the clause most relevant to the job first; use bold, confident action verbs (e.g. "Engineered," "Delivered," "Architected") and frame accomplishments as proof the candidate can do this job — tone upgrade only, do NOT invent new facts, metrics, or claims; for bullets about experience clearly irrelevant to this role, compress to a shorter neutral phrase rather than full technical detail
 
 Rules:
-- NEVER fabricate skills or experience not already in the resume
+- NEVER add any named technology, tool, framework, cloud provider, or methodology that is not already explicitly present in the original resume text — not as a parenthetical, not as an implication, not as "familiarity." This is absolute: if a skill is not in the resume, it may not appear in the output under any framing
 - NEVER reorder, insert, or delete paragraphs — only replace the text of paragraphs already in the list
 - Return ONLY a valid JSON array. Start your response with [ and end with ]. No explanation, no markdown fences, nothing outside the array.
 - Only include entries for paragraphs you actually changed
@@ -837,7 +837,9 @@ No markdown fences, no extra text. Just the JSON object.
 """,
                 Messages = [new() { Role = "user", Content = content }]
             });
-            var raw = TrimToJson(ExtractText(response), '{', '}');
+            var extracted = ExtractText(response);
+            var raw = TrimToJson(extracted, '{', '}');
+            Console.WriteLine($"[ScoreMatch] raw ({raw.Length} chars): {raw[..Math.Min(200, raw.Length)]}");
             using var doc = JsonDocument.Parse(raw);
             var score = doc.RootElement.GetProperty("score").GetInt32();
             return score;
@@ -845,6 +847,8 @@ No markdown fences, no extra text. Just the JSON object.
         catch (Exception ex)
         {
             Console.WriteLine($"[ScoreMatch] FAILED — {ex.GetType().Name}: {ex.Message[..Math.Min(300, ex.Message.Length)]}");
+            if (ex.InnerException != null)
+                Console.WriteLine($"[ScoreMatch] Inner: {ex.InnerException.GetType().Name}: {ex.InnerException.Message[..Math.Min(200, ex.InnerException.Message.Length)]}");
             return null;
         }
     }
