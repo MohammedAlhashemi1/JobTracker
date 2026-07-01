@@ -19,6 +19,9 @@
     "recharts": "^3.8.1",
     "remark-gfm": "^4.0.1"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.0",
