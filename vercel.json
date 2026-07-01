@@ -1,0 +1,6 @@
+{
+  "installCommand": "cd JobTracker.Web && npm install",
+  "buildCommand": "cd JobTracker.Web && npm run build",
+  "outputDirectory": "JobTracker.Web/dist",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
