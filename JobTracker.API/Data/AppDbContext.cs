@@ -30,7 +30,7 @@ public class AppDbContext : DbContext
             // Store enum as its string name so the DB column stays nvarchar(50)
             // and no data migration is needed (existing rows already contain the names).
             e.Property(a => a.Status).HasMaxLength(50).HasConversion<string>();
-            e.Property(a => a.JobDescription).HasColumnType("nvarchar(max)");
+            e.Property(a => a.JobDescription).HasColumnType("text");
             e.Property(a => a.Notes).HasMaxLength(4000);
             e.HasOne(a => a.User)
              .WithMany(u => u.Applications)
@@ -41,7 +41,7 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<ChatMessage>(e =>
         {
             e.Property(c => c.Role).HasMaxLength(20).IsRequired();
-            e.Property(c => c.Content).HasColumnType("nvarchar(max)").IsRequired();
+            e.Property(c => c.Content).HasColumnType("text").IsRequired();
             e.HasOne(c => c.User)
              .WithMany(u => u.ChatMessages)
              .HasForeignKey(c => c.UserId)
