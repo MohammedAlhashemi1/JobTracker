@@ -97,8 +97,10 @@ Rules:
 - CRITICAL: Output sections in EXACTLY the same order they appear in the candidate's original resume. Do not reorder, merge, or drop sections.
 - Keep every job title, company, date, and educational credential exactly as-is
 - Do NOT add skills, technologies, or achievements the candidate has not claimed
-- DO rewrite bullet points using keywords and phrasing from the job posting
-- DO reorder bullets within each role to surface the most relevant first
+- DO rewrite bullet points using keywords and phrasing from the job posting; lead each bullet with the clause most relevant to the job first
+- For bullets covering experience clearly irrelevant to this role, compress to a shorter neutral phrase rather than full technical detail — do not invent new claims
+- DO reorder bullets within each entry so the most job-relevant ones appear first
+- DO reorder entries (projects, roles, etc.) within each section so the most job-relevant ones appear first
 - DO optimize the profile/summary section with matching keywords
 
 Section types:
@@ -409,8 +411,10 @@ Rules:
 - CRITICAL: Output sections in EXACTLY the same order they appear in the candidate's original resume. Do not reorder, merge, or drop sections.
 - Keep every job, company, date, and educational credential exactly as-is
 - Do NOT fabricate skills or achievements
-- DO rewrite bullet points using keywords from the job posting
-- DO reorder bullets within each role to lead with the most relevant ones
+- DO rewrite bullet points using keywords from the job posting; lead each bullet with the clause most relevant to the job first
+- For bullets covering experience clearly irrelevant to this role, compress to a shorter neutral phrase rather than full technical detail — do not fabricate new claims
+- DO reorder bullets within each entry so the most job-relevant ones appear first
+- DO reorder entries (projects, roles, etc.) within each section so the most job-relevant ones appear first
 - DO optimize the profile/summary section with matching job keywords
 
 Section types:
@@ -546,10 +550,11 @@ You are a professional resume optimizer. You receive a numbered list of paragrap
 What to do:
 - Long profile/summary text: rewrite using keywords from the job posting while keeping the candidate's real background
 - Skill lines ("Category: values"): reorder and strengthen with relevant terms from the posting — only use skills related to what the candidate already has
-- Bullet points (start with action verbs): rewrite using keywords and phrasing from the posting, keeping the same underlying fact
+- Bullet points (start with action verbs): rewrite leading with the clause most relevant to the job first; for bullets about experience clearly irrelevant to this role, compress to a shorter neutral phrase rather than full technical detail — never fabricate new claims
 
 Rules:
 - NEVER fabricate skills or experience not already in the resume
+- NEVER reorder, insert, or delete paragraphs — only replace the text of paragraphs already in the list
 - Return ONLY a valid JSON array. Start your response with [ and end with ]. No explanation, no markdown fences, nothing outside the array.
 - Only include entries for paragraphs you actually changed
 
