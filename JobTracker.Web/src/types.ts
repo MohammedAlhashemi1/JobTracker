@@ -86,6 +86,16 @@ export interface JobMatchResult {
 
 export interface ResumeTailorResult {
   tailoredResume: string;
+  originalMatchScore?: number;
+  tailoredMatchScore?: number;
+  originalResumeText?: string;
+}
+
+export interface TailorPreserveResponse {
+  tailoredResumeDocx: string;
+  originalMatchScore?: number;
+  tailoredMatchScore?: number;
+  tailoredDocxText?: string;
 }
 
 export interface CoverLetterResult {

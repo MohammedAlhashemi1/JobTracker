@@ -65,13 +65,18 @@ public class AnonymousAgentsController : ControllerBase
         try
         {
             var resume = await ResolveResumeAsync(req.ResumeBase64);
-            var bytes  = await _agents.TailorResumePreserveAsync(req.JobDescription, resume);
-            if (bytes is null) return NoContent();
-            return Ok(Convert.ToBase64String(bytes));
+            var result = await _agents.TailorResumePreserveAsync(req.JobDescription, resume);
+            if (result.Docx is null) return NoContent();
+            return Ok(new
+            {
+                tailoredResumeDocx   = Convert.ToBase64String(result.Docx),
+                originalMatchScore   = result.OriginalMatchScore,
+                tailoredMatchScore   = result.TailoredMatchScore,
+                tailoredDocxText     = result.TailoredDocxText
+            });
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TailorPreserve] CONTROLLER EXCEPTION: {ex.GetType().Name}: {ex.Message}");
             return StatusCode(500, new { message = ex.Message });
         }
     }

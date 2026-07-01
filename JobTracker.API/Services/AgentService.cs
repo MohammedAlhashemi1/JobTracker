@@ -142,7 +142,20 @@ Return ONLY the JSON.
         app.TailoredResume = tailored;
         app.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
-        return new ResumeTailorResult { TailoredResume = tailored };
+
+        var tailoredText = ExtractTextFromResumeJson(tailored);
+        var origContent = await BuildUserMessageAsync($"Job: {app.JobTitle} at {app.Company}\n\n{app.JobDescription}", user.ResumeUrl);
+        MessageParamContent tailoredContent = $"Candidate's resume:\n\n{tailoredText}\n\n---\n\nJob: {app.JobTitle} at {app.Company}\n\n{app.JobDescription}";
+        var origScoreTask = ScoreMatchAsync(origContent);
+        var tailoredScoreTask = ScoreMatchAsync(tailoredContent);
+        await Task.WhenAll(origScoreTask, tailoredScoreTask);
+
+        return new ResumeTailorResult
+        {
+            TailoredResume = tailored,
+            OriginalMatchScore = origScoreTask.Result,
+            TailoredMatchScore = tailoredScoreTask.Result
+        };
     }
 
     public async Task<CoverLetterResult> WriteCoverLetterAsync(int applicationId, int userId)
@@ -405,6 +418,22 @@ Return only the subject line and email body. No extra commentary.
 
     public async Task<ResumeTailorResult> TailorResumeAnonymousAsync(string jobDescription, string? resumeData)
     {
+        // Resolve blob URL once upfront so BuildUserMessageAsync doesn't re-download below
+        if (!string.IsNullOrWhiteSpace(resumeData) && _blob.IsBlobUrl(resumeData))
+        {
+            var (blobBytes, contentType) = await _blob.DownloadResumeAsync(resumeData);
+            resumeData = $"data:{contentType};base64,{Convert.ToBase64String(blobBytes)}";
+        }
+
+        // Extract original resume text for client-side diff display (DOCX only; PDF not extractable as text)
+        var originalResumeText = string.Empty;
+        if (!string.IsNullOrWhiteSpace(resumeData) &&
+            (resumeData.StartsWith("data:application/vnd.openxmlformats") ||
+             resumeData.StartsWith("data:application/msword")))
+        {
+            originalResumeText = ExtractDocxText(resumeData);
+        }
+
         var system = """
 You are a professional resume optimizer. Parse the candidate's resume, tailor the content to match the job posting, and return ONLY a valid JSON object following the exact schema below. No extra text, no markdown fences.
 
@@ -453,7 +482,21 @@ Return ONLY the JSON.
             Messages  = [new() { Role = "user", Content = await BuildUserMessageAsync($"Optimize my resume for this job posting:\n\n{jobDescription}", resumeData) }]
         });
 
-        return new ResumeTailorResult { TailoredResume = ExtractText(response) };
+        var tailored = ExtractText(response);
+        var tailoredText = ExtractTextFromResumeJson(tailored);
+        var origContent = await BuildUserMessageAsync($"Job posting:\n\n{jobDescription}", resumeData);
+        MessageParamContent tailoredContent = $"Candidate's resume:\n\n{tailoredText}\n\n---\n\nJob posting:\n\n{jobDescription}";
+        var origScoreTask = ScoreMatchAsync(origContent);
+        var tailoredScoreTask = ScoreMatchAsync(tailoredContent);
+        await Task.WhenAll(origScoreTask, tailoredScoreTask);
+
+        return new ResumeTailorResult
+        {
+            TailoredResume = tailored,
+            OriginalMatchScore = origScoreTask.Result,
+            TailoredMatchScore = tailoredScoreTask.Result,
+            OriginalResumeText = string.IsNullOrWhiteSpace(originalResumeText) ? null : originalResumeText
+        };
     }
 
     public async Task<CoverLetterResult> WriteCoverLetterAnonymousAsync(string jobDescription, string? resumeData)
@@ -495,9 +538,9 @@ Write it as if you are the candidate. Make it sound human, not AI-generated.
         return new CoverLetterResult { CoverLetter = ExtractText(response) };
     }
 
-    public async Task<byte[]?> TailorResumePreserveAsync(string jobDescription, string? resumeData)
+    public async Task<TailorPreserveResult> TailorResumePreserveAsync(string jobDescription, string? resumeData)
     {
-        if (string.IsNullOrWhiteSpace(resumeData)) return null;
+        if (string.IsNullOrWhiteSpace(resumeData)) return new TailorPreserveResult();
 
         // Issue 2: if the caller passed a blob URL, download it first and convert to a data URL
         // so the rest of this method's existing logic can work unchanged.
@@ -507,13 +550,9 @@ Write it as if you are the candidate. Make it sound human, not AI-generated.
             resumeData = $"data:{contentType};base64,{Convert.ToBase64String(blobBytes)}";
         }
 
-        Console.WriteLine($"[TailorPreserve] MIME prefix: {resumeData[..Math.Min(80, resumeData.Length)]}");
-
         var commaIdx = resumeData.IndexOf(',');
-        if (commaIdx < 0) { Console.WriteLine("[TailorPreserve] No comma found in data URL — aborting"); return null; }
+        if (commaIdx < 0) return new TailorPreserveResult();
         var originalBytes = Convert.FromBase64String(resumeData[(commaIdx + 1)..]);
-
-        Console.WriteLine($"[TailorPreserve] Step 1 — resume bytes decoded: {originalBytes.Length} bytes");
 
         var mimeOk  = resumeData.StartsWith("data:application/vnd.openxmlformats") ||
                       resumeData.StartsWith("data:application/msword");
@@ -521,16 +560,9 @@ Write it as if you are the candidate. Make it sound human, not AI-generated.
                       originalBytes[0] == 0x50 && originalBytes[1] == 0x4B &&
                       originalBytes[2] == 0x03 && originalBytes[3] == 0x04;
 
-        Console.WriteLine($"[TailorPreserve] mimeOk={mimeOk} magicOk={magicOk}");
-
-        if (!mimeOk && !magicOk)
-        {
-            Console.WriteLine("[TailorPreserve] Not a DOCX — returning null (204)");
-            return null;
-        }
+        if (!mimeOk && !magicOk) return new TailorPreserveResult();
 
         var paragraphs = ExtractDocxParagraphList(originalBytes);
-        Console.WriteLine($"[TailorPreserve] Step 2 — paragraphs extracted: {paragraphs.Count}");
 
         var editableIndices = new HashSet<int>();
         var editableLines   = new List<string>();
@@ -540,9 +572,6 @@ Write it as if you are the candidate. Make it sound human, not AI-generated.
             editableIndices.Add(i);
             editableLines.Add($"{i}: {paragraphs[i]}");
         }
-        Console.WriteLine($"[TailorPreserve] Step 3 — editable paragraphs: {editableIndices.Count}");
-        if (editableLines.Count > 0)
-            Console.WriteLine($"[TailorPreserve] First editable: {editableLines[0][..Math.Min(120, editableLines[0].Length)]}");
 
         var numberedList = string.Join("\n", editableLines);
 
@@ -574,14 +603,22 @@ Format: [{"i": <index>, "t": "<full rewritten text>"}, ...]
         });
 
         var raw = ExtractText(response).Trim();
-        Console.WriteLine($"[TailorPreserve] Step 4 — Claude raw response ({raw.Length} chars): {raw[..Math.Min(300, raw.Length)]}");
-
         var changes = ParseParagraphChanges(raw);
-        Console.WriteLine($"[TailorPreserve] Step 5 — parsed changes: {changes.Count}");
+        var resultBytes = ApplyDocxChanges(originalBytes, changes, editableIndices);
 
-        var result = ApplyDocxChanges(originalBytes, changes, editableIndices);
-        Console.WriteLine($"[TailorPreserve] Step 6 — ApplyDocxChanges returned {result.Length} bytes (original was {originalBytes.Length})");
-        return result;
+        var originalText = string.Join("\n", ExtractDocxParagraphList(originalBytes).Where(s => !string.IsNullOrWhiteSpace(s)));
+        var tailoredDocxText = string.Join("\n", ExtractDocxParagraphList(resultBytes).Where(s => !string.IsNullOrWhiteSpace(s)));
+        var origScoreTask2 = ScoreMatchAsync($"Candidate's resume:\n\n{originalText}\n\n---\n\nJob posting:\n\n{jobDescription}");
+        var tailoredScoreTask2 = ScoreMatchAsync($"Candidate's resume:\n\n{tailoredDocxText}\n\n---\n\nJob posting:\n\n{jobDescription}");
+        await Task.WhenAll(origScoreTask2, tailoredScoreTask2);
+
+        return new TailorPreserveResult
+        {
+            Docx = resultBytes,
+            OriginalMatchScore = origScoreTask2.Result,
+            TailoredMatchScore = tailoredScoreTask2.Result,
+            TailoredDocxText = tailoredDocxText
+        };
     }
 
     // ── private helpers ────────────────────────────────────────────────────────
@@ -784,4 +821,66 @@ Format: [{"i": <index>, "t": "<full rewritten text>"}, ...]
 
     private static readonly JsonSerializerOptions CaseInsensitive =
         new() { PropertyNameCaseInsensitive = true };
+
+    private async Task<int?> ScoreMatchAsync(MessageParamContent content)
+    {
+        try
+        {
+            var response = await _client.Messages.Create(new MessageCreateParams
+            {
+                Model     = Model.ClaudeSonnet4_6,
+                MaxTokens = 256,
+                System    = """
+You are a career coach scoring how well a candidate's resume matches a job posting.
+Return ONLY a valid JSON object: {"score": <integer 0-100>, "matchingSkills": [], "missingSkills": [], "emphasis": ""}
+No markdown fences, no extra text. Just the JSON object.
+""",
+                Messages = [new() { Role = "user", Content = content }]
+            });
+            var raw = TrimToJson(ExtractText(response), '{', '}');
+            using var doc = JsonDocument.Parse(raw);
+            var score = doc.RootElement.GetProperty("score").GetInt32();
+            return score;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ScoreMatch] FAILED — {ex.GetType().Name}: {ex.Message[..Math.Min(300, ex.Message.Length)]}");
+            return null;
+        }
+    }
+
+    private static string ExtractTextFromResumeJson(string json)
+    {
+        try
+        {
+            json = TrimToJson(json, '{', '}');
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            var sb = new StringBuilder();
+
+            if (root.TryGetProperty("name", out var name)) sb.AppendLine(name.GetString());
+            if (root.TryGetProperty("contact", out var contact))
+                foreach (var c in contact.EnumerateArray()) sb.AppendLine(c.GetString());
+
+            if (root.TryGetProperty("sections", out var sections))
+                foreach (var section in sections.EnumerateArray())
+                {
+                    if (section.TryGetProperty("title", out var title)) sb.AppendLine(title.GetString());
+                    if (section.TryGetProperty("content", out var content)) sb.AppendLine(content.GetString());
+                    if (section.TryGetProperty("items", out var items))
+                        foreach (var item in items.EnumerateArray())
+                        {
+                            if (item.TryGetProperty("title", out var iTitle)) sb.AppendLine(iTitle.GetString());
+                            if (item.TryGetProperty("subtitle", out var sub)) sb.AppendLine(sub.GetString());
+                            if (item.TryGetProperty("key", out var key)) sb.Append(key.GetString() + ": ");
+                            if (item.TryGetProperty("value", out var val)) sb.AppendLine(val.GetString());
+                            if (item.TryGetProperty("bullets", out var bullets))
+                                foreach (var b in bullets.EnumerateArray()) sb.AppendLine(b.GetString());
+                        }
+                }
+
+            return sb.ToString().Trim();
+        }
+        catch { return json; }
+    }
 }

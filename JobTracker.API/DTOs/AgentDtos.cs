@@ -11,6 +11,17 @@ public class JobMatchResult
 public class ResumeTailorResult
 {
     public string TailoredResume { get; set; } = string.Empty;
+    public int? OriginalMatchScore { get; set; }
+    public int? TailoredMatchScore { get; set; }
+    public string? OriginalResumeText { get; set; }
+}
+
+public class TailorPreserveResult
+{
+    public byte[]? Docx { get; set; }
+    public int? OriginalMatchScore { get; set; }
+    public int? TailoredMatchScore { get; set; }
+    public string? TailoredDocxText { get; set; }
 }
 
 public class CoverLetterResult

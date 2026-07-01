@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import AiLimitModal from '../components/AiLimitModal';
 import api from '../lib/api';
+import type { ResumeTailorResult, TailorPreserveResponse } from '../types';
 
 const AGENTS = [
   {
@@ -56,24 +57,31 @@ export default function GeneratePage() {
       const payload = { jobDescription: jobDescription.trim() };
 
       const [preserveRes, tailorRes, coverRes] = await Promise.all([
-        api.post<string>('/agents/anonymous/tailor-preserve', payload, { validateStatus: () => true }),
-        api.post<{ tailoredResume: string }>('/agents/anonymous/tailor', payload, { validateStatus: () => true }),
+        api.post<TailorPreserveResponse>('/agents/anonymous/tailor-preserve', payload, { validateStatus: () => true }),
+        api.post<ResumeTailorResult>('/agents/anonymous/tailor', payload, { validateStatus: () => true }),
         api.post<{ coverLetter: string }>('/agents/anonymous/cover-letter', payload, { validateStatus: () => true }),
       ]);
 
       if (preserveRes.status === 403 || tailorRes.status === 403 || coverRes.status === 403) {
+        sessionStorage.removeItem('generateResults');
         setShowLimitModal(true);
         setGenerating(false);
         return;
       }
 
-      navigate('/generate/results', {
-        state: {
-          tailoredResumeDocx: preserveRes.status === 200 && preserveRes.data ? preserveRes.data : undefined,
-          tailoredResume:     tailorRes.status === 200 ? tailorRes.data.tailoredResume : undefined,
-          coverLetter:        coverRes.status === 200 ? coverRes.data.coverLetter : '',
-        },
-      });
+      try {
+        sessionStorage.setItem('generateResults', JSON.stringify({
+          tailoredResumeDocx:  preserveRes.status === 200 ? preserveRes.data?.tailoredResumeDocx : undefined,
+          tailoredResume:      tailorRes.status === 200 ? tailorRes.data.tailoredResume : undefined,
+          coverLetter:         coverRes.status === 200 ? coverRes.data.coverLetter : '',
+          originalMatchScore:  tailorRes.status === 200 ? tailorRes.data.originalMatchScore : undefined,
+          tailoredMatchScore:  tailorRes.status === 200 ? tailorRes.data.tailoredMatchScore : undefined,
+          originalResumeText:  tailorRes.status === 200 ? tailorRes.data.originalResumeText : undefined,
+          tailoredDocxText:    preserveRes.status === 200 ? preserveRes.data?.tailoredDocxText : undefined,
+        }));
+      } catch { /* sessionStorage unavailable */ }
+
+      navigate('/generate/results');
     } catch {
       setError('Something went wrong. Please try again.');
       setGenerating(false);
