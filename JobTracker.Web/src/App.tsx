@@ -21,9 +21,11 @@ export default function App() {
           <Route path="/login"   element={<Login />}   />
           <Route path="/register" element={<Register />} />
 
+          {/* generate/results is public — anonymous trial users land here after generation */}
+          <Route path="/generate/results" element={<Generate />} />
+
           {/* protected */}
-          <Route path="/generate"         element={<PrivateRoute><GeneratePage /></PrivateRoute>} />
-          <Route path="/generate/results" element={<PrivateRoute><Generate     /></PrivateRoute>} />
+          <Route path="/generate" element={<PrivateRoute><GeneratePage /></PrivateRoute>} />
           <Route path="/dashboard"        element={<PrivateRoute><Dashboard    /></PrivateRoute>} />
           <Route path="/applications"     element={<PrivateRoute><Applications /></PrivateRoute>} />
           <Route path="/chat"             element={<PrivateRoute><Chat         /></PrivateRoute>} />

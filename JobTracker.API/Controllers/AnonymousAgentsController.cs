@@ -9,11 +9,11 @@ using JobTracker.API.Services;
 
 namespace JobTracker.API.Controllers;
 
-[Authorize]
 [ApiController]
 [Route("api/agents/anonymous")]
-[EnableRateLimiting("ai-policy")]
+[EnableRateLimiting("anonymous-trial")]
 [ServiceFilter(typeof(AiCallLimitFilter))]
+[RequestSizeLimit(5 * 1024 * 1024)] // 5 MB — resume base64 can be large
 public class AnonymousAgentsController : ControllerBase
 {
     private readonly AgentService _agents;
@@ -81,12 +81,12 @@ public class AnonymousAgentsController : ControllerBase
         }
     }
 
-    // Issue 2: if the caller didn't supply an inline resume (because the frontend
-    // no longer sends profile.resumeUrl as base64), look up the stored URL from the
-    // user's profile.  AgentService.BuildUserMessageAsync then downloads it from blob.
+    // Authenticated users: fall back to their stored profile resume if no inline data.
+    // Anonymous users: must supply the resume inline; no profile to look up.
     private async Task<string?> ResolveResumeAsync(string? inlineBase64)
     {
         if (inlineBase64 is not null) return inlineBase64;
+        if (User.Identity?.IsAuthenticated != true) return null;
         var user = await _db.Users.FindAsync(GetUserId());
         return user?.ResumeUrl;
     }

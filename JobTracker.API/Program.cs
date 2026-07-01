@@ -45,12 +45,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// ── Issue 1: per-user fixed-window rate limiter for AI endpoints ─────────────
+// ── Rate limiters ─────────────────────────────────────────────────────────────
 builder.Services.AddRateLimiter(options =>
 {
+    // Per-user fixed-window limiter for authenticated AI endpoints.
     options.AddPolicy("ai-policy", context =>
     {
-        // Partition by authenticated user ID; fall back to IP for unauthenticated requests.
         var partitionKey =
             context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
             ?? context.Connection.RemoteIpAddress?.ToString()
@@ -61,10 +61,44 @@ builder.Services.AddRateLimiter(options =>
             PermitLimit          = 10,
             Window               = TimeSpan.FromMinutes(1),
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-            QueueLimit           = 0   // reject immediately when limit is hit
+            QueueLimit           = 0
         });
     });
-    options.RejectionStatusCode = 429;
+
+    // One free trial generate per IP per 24 hours for unauthenticated users.
+    // PermitLimit = 3 because one full generate fires 3 parallel API calls
+    // (tailor-preserve, tailor, cover-letter) and all three must succeed together.
+    // Authenticated users bypass this entirely — they use the AiCallLimitFilter instead.
+    // X-Forwarded-For is read because Railway sits behind a reverse proxy and
+    // Connection.RemoteIpAddress would otherwise be the same proxy IP for everyone.
+    options.AddPolicy("anonymous-trial", context =>
+    {
+        if (context.User.Identity?.IsAuthenticated == true)
+            return RateLimitPartition.GetNoLimiter("authenticated");
+
+        var ip = context.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                     ?.Split(',')[0].Trim()
+                 ?? context.Connection.RemoteIpAddress?.ToString()
+                 ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter($"anon:{ip}", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit          = 3,
+            Window               = TimeSpan.FromHours(24),
+            QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+            QueueLimit           = 0,
+        });
+    });
+
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.StatusCode  = 429;
+        context.HttpContext.Response.ContentType = "application/json";
+        var body = context.HttpContext.User.Identity?.IsAuthenticated == true
+            ? """{"message":"Too many requests — please wait a moment and try again."}"""
+            : """{"message":"You've used your free trial generation. Create a free account to keep going.","trialExpired":true}""";
+        await context.HttpContext.Response.WriteAsync(body, token);
+    };
 });
 
 // ── Issue 4: CORS — exact extension ID allowlist loaded from config ──────────
