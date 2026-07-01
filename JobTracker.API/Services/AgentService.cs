@@ -829,10 +829,11 @@ Format: [{"i": <index>, "t": "<full rewritten text>"}, ...]
             var response = await _client.Messages.Create(new MessageCreateParams
             {
                 Model     = Model.ClaudeSonnet4_6,
-                MaxTokens = 256,
+                MaxTokens = 1024,
                 System    = """
 You are a career coach scoring how well a candidate's resume matches a job posting.
-Return ONLY a valid JSON object: {"score": <integer 0-100>, "matchingSkills": [], "missingSkills": [], "emphasis": ""}
+Return ONLY a valid JSON object with these four fields — keep arrays short (≤5 items, single words or short phrases):
+{"score": <integer 0-100>, "matchingSkills": ["skill1", ...], "missingSkills": ["skill1", ...], "emphasis": "<one short sentence>"}
 No markdown fences, no extra text. Just the JSON object.
 """,
                 Messages = [new() { Role = "user", Content = content }]
