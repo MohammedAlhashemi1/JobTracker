@@ -98,6 +98,7 @@ Rules:
 - Keep every job title, company, date, and educational credential exactly as-is
 - Do NOT add skills, technologies, or achievements the candidate has not claimed
 - DO rewrite bullet points using keywords and phrasing from the job posting; lead each bullet with the clause most relevant to the job first
+- Write bullets with bold, confident language — open with strong action verbs (e.g. "Engineered," "Delivered," "Architected") and frame each accomplishment as proof the candidate can do this job, not just a description of what was done. This is a tone upgrade only: do NOT invent new facts, metrics, or claims — only rephrase existing true content more persuasively
 - For bullets covering experience clearly irrelevant to this role, compress to a shorter neutral phrase rather than full technical detail — do not invent new claims
 - DO reorder bullets within each entry so the most job-relevant ones appear first
 - DO reorder entries (projects, roles, etc.) within each section so the most job-relevant ones appear first
@@ -412,6 +413,7 @@ Rules:
 - Keep every job, company, date, and educational credential exactly as-is
 - Do NOT fabricate skills or achievements
 - DO rewrite bullet points using keywords from the job posting; lead each bullet with the clause most relevant to the job first
+- Write bullets with bold, confident language — open with strong action verbs (e.g. "Engineered," "Delivered," "Architected") and frame each accomplishment as proof the candidate can do this job, not just a description of what was done. This is a tone upgrade only: do NOT invent new facts, metrics, or claims — only rephrase existing true content more persuasively
 - For bullets covering experience clearly irrelevant to this role, compress to a shorter neutral phrase rather than full technical detail — do not fabricate new claims
 - DO reorder bullets within each entry so the most job-relevant ones appear first
 - DO reorder entries (projects, roles, etc.) within each section so the most job-relevant ones appear first
@@ -550,7 +552,7 @@ You are a professional resume optimizer. You receive a numbered list of paragrap
 What to do:
 - Long profile/summary text: rewrite using keywords from the job posting while keeping the candidate's real background
 - Skill lines ("Category: values"): reorder and strengthen with relevant terms from the posting — only use skills related to what the candidate already has
-- Bullet points (start with action verbs): rewrite leading with the clause most relevant to the job first; for bullets about experience clearly irrelevant to this role, compress to a shorter neutral phrase rather than full technical detail — never fabricate new claims
+- Bullet points (start with action verbs): rewrite leading with the clause most relevant to the job first; use bold, confident action verbs (e.g. "Engineered," "Delivered," "Architected") and frame accomplishments as proof the candidate can do this job — tone upgrade only, do NOT invent new facts, metrics, or claims; for bullets about experience clearly irrelevant to this role, compress to a shorter neutral phrase rather than full technical detail
 
 Rules:
 - NEVER fabricate skills or experience not already in the resume
