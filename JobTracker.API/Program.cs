@@ -89,6 +89,9 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+
 app.UseCors("AllowExtension");
 app.UseHttpsRedirection();
 app.UseAuthentication();
