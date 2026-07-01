@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:5220/api',
+  baseURL: import.meta.env.VITE_API_URL ?? 'https://jobtracker-production-64c7.up.railway.app/api',
 });
 
 api.interceptors.request.use((config) => {
