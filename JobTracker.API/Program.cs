@@ -75,14 +75,15 @@ var allowedExtensions =
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins("http://localhost:5173", "https://job-tracker-three-umber.vercel.app")
               .AllowAnyHeader()
               .AllowAnyMethod());
 
     options.AddPolicy("AllowExtension", policy =>
         policy.SetIsOriginAllowed(origin =>
             allowedExtensions.Contains(origin) ||
-            origin == "http://localhost:5173")
+            origin == "http://localhost:5173" ||
+            origin == "https://job-tracker-three-umber.vercel.app")
               .AllowAnyHeader()
               .AllowAnyMethod());
 });
